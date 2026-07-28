@@ -74,6 +74,15 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // Endpoint /clave
+  if (reqUrl.pathname === '/clave') {
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({
+      clave: process.env.CLAVE || null
+    }, null, 2));
+    return;
+  }
+
   // Endpoint para obtener alineaciones por ID de partido:
   // Admite ambos formatos: /lineups/16350227 o /lineups?id=16350227
   const matchPath = reqUrl.pathname.match(/^\/lineups\/([a-zA-Z0-9]+)$/);
@@ -98,6 +107,7 @@ const server = http.createServer(async (req, res) => {
     message: '¡Servidor Node.js activo y funcionando!',
     endpoints: {
       hola: '/hola',
+      clave: '/clave',
       lineups: '/lineups/:id (ejemplo: /lineups/16350227)'
     },
     timestamp: new Date().toISOString()
