@@ -1,6 +1,5 @@
-const https = require('https');
-
-const url = 'https://www.sofascore.com/api/v1/event/16350227/lineups';
+import https from 'https';
+import fs from 'node:fs';
 
 // Configurar ciphers específicos de Chrome para pasar el filtro de huella TLS
 const chromeCiphers = [
@@ -15,7 +14,7 @@ const chromeCiphers = [
 function fetchSofascore(endpointUrl) {
   return new Promise((resolve, reject) => {
     const parsedUrl = new URL(endpointUrl);
-    
+
     const options = {
       hostname: parsedUrl.hostname,
       port: 443,
@@ -62,16 +61,36 @@ function fetchSofascore(endpointUrl) {
   });
 }
 
-async function obtenerLineups() {
+async function obtenerCalendario() {
   try {
-    console.log('Realizando petición a Sofascore ajustando la huella TLS...');
-    const data = await fetchSofascore(url);
-    console.log('\n✅ JSON obtenido con éxito (Status 200):\n');
-    console.log(JSON.stringify(data, null, 2));
-    return data;
-  } catch (error) {
+    //https://www.sofascore.com/api/v1/unique-tournament/7/season/76953/events/round/1
+    // hay 8 rondas en la fase de grupos
+    let partidosArray = [];
+    for (let i = 1; i <= 8; i++) {
+      const url = `https://www.sofascore.com/api/v1/unique-tournament/7/season/76953/events/round/${i}`;
+      const data = await fetchSofascore(url);
+      const partidos = data.events.map(p => ({
+        ronda: i,
+        id: p.id,
+        fecha: p.startTimestamp,
+        equipoLocal: {
+          id: p.homeTeam.id,
+          name: p.homeTeam.name
+        },
+        equipoVisitante: {
+          id: p.awayTeam.id,
+          name: p.awayTeam.name
+        }
+      }));
+      console.log('\n✅ JSON obtenido con éxito (' + partidos.length + ' partidos)');
+      // guardamos el json en un archivo llamado calendar.json
+      partidosArray.push(...partidos);
+    }
+    await fs.writeFileSync(`data/sofascore/calendar.json`, JSON.stringify(partidosArray, null, 2));
+    return partidosArray;
+  }  catch (error) {
     console.error('❌ Error:', error.message);
   }
 }
 
-obtenerLineups();
+obtenerCalendario();
