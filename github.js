@@ -48,6 +48,38 @@ async function guardarFichero(ruta, datos, message) {
     }
 }
 
-export { guardarFichero };
+async function leerFichero(ruta) {
+    try {
+        const response = await octokit.rest.repos.getContent({
+            owner: "ldoc",
+            repo: "api-porra",
+            path: ruta,
+            branch: "master"
+        });
+        // decodificamos el contenido y parseamos el JSON
+        const content = Buffer.from(response.data.content, "base64").toString("utf-8");
+        return JSON.parse(content);
+    } catch (error) {
+        console.error("Error al leer el fichero:", error);
+        return null;
+    }
+}
 
-//guardarFichero("data/pruebafunciones.txt", "hola");
+async function getUser(username) {
+  try {
+    const data = await leerFichero(`data/users/${username.toLowerCase()}.json`);
+    return data;
+  } catch (error) {
+    return null;
+  }
+}
+
+async function saveUser(username, data) {
+  await guardarFichero(
+    `data/users/${username}.json`,
+    JSON.stringify(data, null, 2),
+    `feat(user): create/update user ${username}`
+  );
+}
+
+export { guardarFichero, leerFichero, getUser, saveUser };
