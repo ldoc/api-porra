@@ -2,7 +2,7 @@ import 'dotenv/config';
 import http from 'http';
 import https from 'https';
 import { guardarFichero, leerFichero } from './github.js';
-import { register, login, getProfile, saveProfile, getTakenAvatars } from './api/auth.js';
+import { register, login, getProfile, saveProfile, getTakenAvatars, getAllPlayers } from './api/auth.js';
 
 const PORT = process.env.PORT || 3000;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://porra-spa.vercel.app';
@@ -118,6 +118,14 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // Endpoint: Todos los jugadores registrados (para clasificación)
+  if (reqUrl.pathname === '/api/players' && req.method === 'GET') {
+    const players = await getAllPlayers();
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ ok: true, players }));
+    return;
+  }
+
   // // Endpoint /clave
   // if (reqUrl.pathname === '/clave') {
   //   res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -210,7 +218,8 @@ const server = http.createServer(async (req, res) => {
       getProfile: 'GET /api/auth/profile?username=xxxx',
       saveProfile: 'POST /api/auth/profile',
       config: 'GET /api/config',
-      avatarsTaken: 'GET /api/avatars/taken'
+      avatarsTaken: 'GET /api/avatars/taken',
+      players: 'GET /api/players'
     },
     timestamp: new Date().toISOString()
   }, null, 2));

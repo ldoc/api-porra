@@ -149,6 +149,30 @@ export async function getTakenAvatars() {
   return taken;
 }
 
+export async function getAllPlayers() {
+  const invitations = await getInvitations();
+  const players = [];
+
+  for (const [clave, username] of Object.entries(invitations)) {
+    if (!username) continue;
+    try {
+      const user = await getUser(username);
+      if (user && user.username) {
+        players.push({
+          name: user.username,
+          avatar: user.avatar || null,
+          points: user.points || 0,
+          hits: user.hits || 0,
+        });
+      }
+    } catch (e) {
+      // skip broken user files
+    }
+  }
+
+  return players;
+}
+
 export async function saveProfile(username, profileData) {
   if (!username) {
     return { ok: false, error: 'Usuario requerido' };

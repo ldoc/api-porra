@@ -54,6 +54,7 @@ api-porra/
 |--------|-----------------------|------------------------------------------------|
 | GET    | `/api/config`         | Configuración del torneo (freeze date, etc.)   |
 | GET    | `/api/avatars/taken`  | Lista de avatares ya cogidos por usuarios      |
+| GET    | `/api/players`        | Lista de todos los jugadores registrados       |
 
 ### Legacy (compatibilidad)
 
@@ -135,6 +136,19 @@ api-porra/
 }
 ```
 
+### Respuesta Players
+
+```json
+// GET /api/players
+{
+  "ok": true,
+  "players": [
+    { "name": "usuario1", "avatar": "⚽", "points": 12, "hits": 3 },
+    { "name": "usuario2", "avatar": "🏆", "points": 8, "hits": 2 }
+  ]
+}
+```
+
 ## Variables de Entorno
 
 | Variable         | Descripción                                    | Ejemplo                          |
@@ -165,7 +179,7 @@ await saveUser("nombreusuario", { username, passwordHash, avatar, createdAt });
 ## Funciones de Auth (api/auth.js)
 
 ```js
-import { register, login, getProfile, saveProfile, getTakenAvatars } from './api/auth.js';
+import { register, login, getProfile, saveProfile, getTakenAvatars, getAllPlayers } from './api/auth.js';
 
 // Registrar usuario
 const result = await register(username, password, invitationCode);
@@ -181,6 +195,9 @@ const result = await saveProfile(username, { avatar });
 
 // Obtener lista de avatares ya cogidos
 const taken = await getTakenAvatars(); // ['⚽', '🏆', ...]
+
+// Obtener todos los jugadores registrados (para clasificación)
+const players = await getAllPlayers(); // [{ name, avatar, points, hits }, ...]
 ```
 
 ## Seguridad
