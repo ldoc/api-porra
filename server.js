@@ -1,8 +1,8 @@
 import 'dotenv/config';
 import http from 'http';
 import https from 'https';
-import { guardarFichero, leerFichero } from './github.js';
-import { register, login, getProfile, saveProfile, getTakenAvatars, getAllPlayers } from './api/auth.js';
+import { guardarFichero, leerFichero, getUser, saveUser } from './github.js';
+import { register, login, getProfile, saveProfile, getTakenAvatars, getAllPlayers, getSquad, saveSquad } from './api/auth.js';
 
 const PORT = process.env.PORT || 3000;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://porra-spa.vercel.app';
@@ -15,7 +15,7 @@ const nuevoUsuario = () => {
 
 function setCorsHeaders(res) {
   res.setHeader('Access-Control-Allow-Origin', FRONTEND_URL);
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 }
 
@@ -126,6 +126,74 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // Endpoint: Obtener predicciones de un usuario
+  if (reqUrl.pathname === '/api/predictions' && req.method === 'GET') {
+    const username = reqUrl.searchParams.get('username');
+    if (!username) {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ ok: false, error: 'Parámetro username requerido' }));
+      return;
+    }
+    const user = await getUser(username.toLowerCase());
+    if (!user) {
+      res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ ok: false, error: 'Usuario no encontrado' }));
+      return;
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ ok: true, predictions: user.predictions || {} }));
+    return;
+  }
+
+  // Endpoint: Guardar/actualizar predicciones de un usuario
+  if (reqUrl.pathname === '/api/predictions' && req.method === 'PUT') {
+    const body = await parseBody(req);
+    if (!body || !body.username || !body.predictions) {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ ok: false, error: 'Body inválido, se requiere username y predictions' }));
+      return;
+    }
+    const user = await getUser(body.username.toLowerCase());
+    if (!user) {
+      res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ ok: false, error: 'Usuario no encontrado' }));
+      return;
+    }
+    user.predictions = body.predictions;
+    await saveUser(body.username.toLowerCase(), user);
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ ok: true }));
+    return;
+  }
+
+  // Endpoint: Obtener plantilla ideal de un usuario
+  if (reqUrl.pathname === '/api/squad' && req.method === 'GET') {
+    const username = reqUrl.searchParams.get('username');
+    if (!username) {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ ok: false, error: 'Parámetro username requerido' }));
+      return;
+    }
+    const result = await getSquad(username);
+    res.writeHead(result.ok ? 200 : 404, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(result));
+    return;
+  }
+
+  // Endpoint: Guardar/actualizar plantilla ideal de un usuario
+  if (reqUrl.pathname === '/api/squad' && req.method === 'PUT') {
+    const body = await parseBody(req);
+    if (!body || !body.username || !body.squad) {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ ok: false, error: 'Body inválido, se requiere username y squad' }));
+      return;
+    }
+    const result = await saveSquad(body.username, body.squad);
+    res.writeHead(result.ok ? 200 : 400, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(result));
+    return;
+  }
+
   // // Endpoint /clave
   // if (reqUrl.pathname === '/clave') {
   //   res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -219,7 +287,11 @@ const server = http.createServer(async (req, res) => {
       saveProfile: 'POST /api/auth/profile',
       config: 'GET /api/config',
       avatarsTaken: 'GET /api/avatars/taken',
-      players: 'GET /api/players'
+      players: 'GET /api/players',
+      getPredictions: 'GET /api/predictions?username=xxxx',
+      savePredictions: 'PUT /api/predictions',
+      getSquad: 'GET /api/squad?username=xxxx',
+      saveSquad: 'PUT /api/squad'
     },
     timestamp: new Date().toISOString()
   }, null, 2));

@@ -48,6 +48,13 @@ api-porra/
 | GET    | `/api/auth/profile`   | Obtener perfil de usuario (username)           |
 | POST   | `/api/auth/profile`   | Guardar perfil de usuario (username, avatar)   |
 
+### Plantilla Ideal
+
+| Método | Ruta                  | Descripción                                    |
+|--------|-----------------------|------------------------------------------------|
+| GET    | `/api/squad`          | Obtener plantilla ideal del usuario (username) |
+| PUT    | `/api/squad`          | Guardar plantilla ideal del usuario (username, squad) |
+
 ### Configuración y Avatares
 
 | Método | Ruta                  | Descripción                                    |
@@ -72,7 +79,12 @@ api-porra/
   "username": "nombreusuario",
   "passwordHash": "salt:hash",
   "avatar": "⚽",
-  "createdAt": "2026-07-31T00:00:00.000Z"
+  "createdAt": "2026-07-31T00:00:00.000Z",
+  "squad": [
+    { "id": 804508, "nombre": "Viktor Gyökeres", "posicion": "F", "club": "Arsenal", "equipo": 42 },
+    { "id": 804509, "nombre": "Omar Marmoush", "posicion": "F", "club": "Man City", "equipo": 130 },
+    ...
+  ]
 }
 ```
 
@@ -121,7 +133,13 @@ api-porra/
     "championsFreezeDate": "2026-09-15T21:00:00Z",
     "championsFreezeLabel": "Fase de Grupos",
     "totalMatches": 144,
-    "squadSize": 11
+    "squadSize": 25,
+    "squadFormation": {
+      "G": 3,
+      "D": 8,
+      "M": 8,
+      "F": 6
+    }
   }
 }
 ```
@@ -133,6 +151,30 @@ api-porra/
 {
   "ok": true,
   "taken": ["⚽", "🏆", "🦁"]
+}
+```
+
+### Respuesta Squad
+
+```json
+// GET /api/squad?username=nombreusuario
+{
+  "ok": true,
+  "squad": [
+    { "id": 804508, "nombre": "Viktor Gyökeres", "posicion": "F", "club": "Arsenal", "equipo": 42 },
+    { "id": 804509, "nombre": "Omar Marmoush", "posicion": "F", "club": "Man City", "equipo": 130 },
+    ...
+  ]
+}
+
+// PUT /api/squad
+// Body: { "username": "nombreusuario", "squad": [{ id, nombre, posicion, club, equipo }, ...] }
+{
+  "ok": true,
+  "squad": [
+    { "id": 804508, "nombre": "Viktor Gyökeres", "posicion": "F", "club": "Arsenal", "equipo": 42 },
+    ...
+  ]
 }
 ```
 
@@ -179,7 +221,7 @@ await saveUser("nombreusuario", { username, passwordHash, avatar, createdAt });
 ## Funciones de Auth (api/auth.js)
 
 ```js
-import { register, login, getProfile, saveProfile, getTakenAvatars, getAllPlayers } from './api/auth.js';
+import { register, login, getProfile, saveProfile, getTakenAvatars, getAllPlayers, getSquad, saveSquad } from './api/auth.js';
 
 // Registrar usuario
 const result = await register(username, password, invitationCode);
@@ -198,6 +240,12 @@ const taken = await getTakenAvatars(); // ['⚽', '🏆', ...]
 
 // Obtener todos los jugadores registrados (para clasificación)
 const players = await getAllPlayers(); // [{ name, avatar, points, hits }, ...]
+
+// Obtener plantilla ideal del usuario
+const squad = await getSquad(username); // [{ id, nombre, posicion, club, equipo }, ...]
+
+// Guardar plantilla ideal del usuario
+const result = await saveSquad(username, squad); // { ok, squad }
 ```
 
 ## Seguridad

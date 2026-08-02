@@ -2,5 +2,11 @@
   "championsFreezeDate": "2026-09-15T21:00:00Z",
   "championsFreezeLabel": "Fase de Grupos",
   "totalMatches": 144,
-  "squadSize": 11
+  "squadSize": 25,
+  "squadFormation": {
+    "G": 3,
+    "D": 8,
+    "M": 8,
+    "F": 6
+  }
 }

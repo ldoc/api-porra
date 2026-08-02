@@ -195,3 +195,48 @@ export async function saveProfile(username, profileData) {
     avatar: updatedUser.avatar
   };
 }
+
+export async function getSquad(username) {
+  if (!username) {
+    return { ok: false, error: 'Usuario requerido' };
+  }
+
+  const user = await getUser(username.toLowerCase());
+  if (!user) {
+    return { ok: false, error: 'Usuario no encontrado' };
+  }
+
+  return {
+    ok: true,
+    squad: user.squad || []
+  };
+}
+
+export async function saveSquad(username, squad) {
+  if (!username) {
+    return { ok: false, error: 'Usuario requerido' };
+  }
+
+  if (!Array.isArray(squad)) {
+    return { ok: false, error: 'squad debe ser un array' };
+  }
+
+  const user = await getUser(username.toLowerCase());
+  if (!user) {
+    return { ok: false, error: 'Usuario no encontrado' };
+  }
+
+  const teams = squad.map(p => p.equipo);
+  const uniqueTeams = new Set(teams);
+  if (uniqueTeams.size !== teams.length) {
+    return { ok: false, error: 'No puede haber jugadores del mismo equipo repetidos' };
+  }
+
+  user.squad = squad;
+  await saveUser(username.toLowerCase(), user);
+
+  return {
+    ok: true,
+    squad: user.squad
+  };
+}
