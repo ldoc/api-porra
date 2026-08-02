@@ -82,6 +82,30 @@
       "club": "Tottenham Hotspur",
       "equipo": 33,
       "extension": "webp"
+    },
+    {
+      "id": 581310,
+      "nombre": "David Raya",
+      "posicion": "G",
+      "club": "Arsenal",
+      "equipo": 42,
+      "extension": "webp"
+    },
+    {
+      "id": 807771,
+      "nombre": "Dávid Hancko",
+      "posicion": "D",
+      "club": "Atlético Madrid",
+      "equipo": 2836,
+      "extension": "webp"
+    },
+    {
+      "id": 1165371,
+      "nombre": "Luca Marianucci",
+      "posicion": "D",
+      "club": "SSC Napoli",
+      "equipo": 2714,
+      "extension": "png"
     }
   ]
 }
