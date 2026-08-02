@@ -17,5 +17,79 @@
       "home": 1,
       "away": 1
     }
-  }
+  },
+  "squad": [
+    {
+      "id": 581310,
+      "nombre": "David Raya",
+      "posicion": "G",
+      "club": "Arsenal",
+      "equipo": 42,
+      "extension": "webp"
+    },
+    {
+      "id": 8959,
+      "nombre": "Manuel Neuer",
+      "posicion": "G",
+      "club": "FC Bayern München",
+      "equipo": 2672,
+      "extension": "webp"
+    },
+    {
+      "id": 930997,
+      "nombre": "Giorgi Mamardashvili",
+      "posicion": "G",
+      "club": "Liverpool FC",
+      "equipo": 44,
+      "extension": "png"
+    },
+    {
+      "id": 868812,
+      "nombre": "Vinícius Júnior",
+      "posicion": "F",
+      "club": "Real Madrid",
+      "equipo": 2829,
+      "extension": "webp"
+    },
+    {
+      "id": 996952,
+      "nombre": "Bradley Barcola",
+      "posicion": "F",
+      "club": "Paris Saint-Germain",
+      "equipo": 1644,
+      "extension": "webp"
+    },
+    {
+      "id": 855833,
+      "nombre": "Ferran Torres",
+      "posicion": "F",
+      "club": "FC Barcelona",
+      "equipo": 2817,
+      "extension": "webp"
+    },
+    {
+      "id": 944656,
+      "nombre": "Julián Alvarez",
+      "posicion": "F",
+      "club": "Atlético Madrid",
+      "equipo": 2836,
+      "extension": "webp"
+    },
+    {
+      "id": 840217,
+      "nombre": "Richarlison",
+      "posicion": "F",
+      "club": "Tottenham Hotspur",
+      "equipo": 33,
+      "extension": "png"
+    },
+    {
+      "id": 1085381,
+      "nombre": "Nicolas Jackson",
+      "posicion": "F",
+      "club": "Chelsea",
+      "equipo": 38,
+      "extension": "webp"
+    }
+  ]
 }
