@@ -25,5 +25,39 @@
       "home": 0,
       "away": 1
     }
-  }
+  },
+  "squad": [
+    {
+      "id": 927359,
+      "nombre": "Vítězslav Jaroš",
+      "posicion": "G",
+      "club": "Liverpool FC",
+      "equipo": 44,
+      "extension": "png"
+    },
+    {
+      "id": 930267,
+      "nombre": "Joan García",
+      "posicion": "G",
+      "club": "FC Barcelona",
+      "equipo": 2817,
+      "extension": "webp"
+    },
+    {
+      "id": 355492,
+      "nombre": "Konrad Laimer",
+      "posicion": "D",
+      "club": "FC Bayern München",
+      "equipo": 2672,
+      "extension": "webp"
+    },
+    {
+      "id": 945798,
+      "nombre": "Djed Spence",
+      "posicion": "D",
+      "club": "Tottenham Hotspur",
+      "equipo": 33,
+      "extension": "webp"
+    }
+  ]
 }
