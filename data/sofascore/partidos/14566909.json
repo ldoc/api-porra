@@ -1,0 +1,230 @@
+{
+  "42": {
+    "goles": 2
+  },
+  "2825": {
+    "goles": 0
+  },
+  "jugadores": [
+    {
+      "id": "797291",
+      "nombre": "Unai Simón",
+      "puntos": 6.1
+    },
+    {
+      "id": "866810",
+      "nombre": "Andoni Gorosabel",
+      "puntos": 6.1
+    },
+    {
+      "id": "910978",
+      "nombre": "Dani Vivian",
+      "puntos": 6.4
+    },
+    {
+      "id": "959872",
+      "nombre": "Aitor Paredes",
+      "puntos": 6.2
+    },
+    {
+      "id": "1398511",
+      "nombre": "Adama Boiro",
+      "puntos": 6.9
+    },
+    {
+      "id": "1495844",
+      "nombre": "Mikel Jauregizar",
+      "puntos": 6.7
+    },
+    {
+      "id": "359742",
+      "nombre": "Mikel Vesga",
+      "puntos": 6.7
+    },
+    {
+      "id": "592012",
+      "nombre": "Álex Berenguer",
+      "puntos": 6.5
+    },
+    {
+      "id": "966801",
+      "nombre": "Oihan Sancet",
+      "puntos": 6.8
+    },
+    {
+      "id": "944165",
+      "nombre": "Robert Navarro",
+      "puntos": 6.4
+    },
+    {
+      "id": "783374",
+      "nombre": "Iñaki Williams",
+      "puntos": 6.7
+    },
+    {
+      "id": "1391375",
+      "nombre": "Unai Gómez",
+      "puntos": 6.4
+    },
+    {
+      "id": "84531",
+      "nombre": "Yuri Berchiche",
+      "puntos": 6.2
+    },
+    {
+      "id": "605672",
+      "nombre": "Gorka Guruzeta",
+      "puntos": 6.4
+    },
+    {
+      "id": "2110897",
+      "nombre": "Alejandro Rego Mora",
+      "puntos": 6.5
+    },
+    {
+      "id": "1019318",
+      "nombre": "Nico Serrano",
+      "puntos": 6.4
+    },
+    {
+      "id": "1155116",
+      "nombre": "Alex Padilla",
+      "puntos": 0
+    },
+    {
+      "id": "1102713",
+      "nombre": "Mikel Santos",
+      "puntos": 0
+    },
+    {
+      "id": "1398532",
+      "nombre": "Jon de Luis",
+      "puntos": 0
+    },
+    {
+      "id": "910267",
+      "nombre": "Jesús Areso",
+      "puntos": 0
+    },
+    {
+      "id": "801837",
+      "nombre": "Íñigo Lekue",
+      "puntos": 0
+    },
+    {
+      "id": "96365",
+      "nombre": "Iñigo Ruiz de Galarreta",
+      "puntos": 0
+    },
+    {
+      "id": "1520799",
+      "nombre": "Maroan Sannadi",
+      "puntos": 0
+    },
+    {
+      "id": "581310",
+      "nombre": "David Raya",
+      "puntos": 7.4
+    },
+    {
+      "id": "958959",
+      "nombre": "Jurriën Timber",
+      "puntos": 7.3
+    },
+    {
+      "id": "1144630",
+      "nombre": "Cristhian Mosquera",
+      "puntos": 7.3
+    },
+    {
+      "id": "869792",
+      "nombre": "Gabriel Magalhães",
+      "puntos": 7.1
+    },
+    {
+      "id": "957602",
+      "nombre": "Riccardo Calafiori",
+      "puntos": 7.3
+    },
+    {
+      "id": "592010",
+      "nombre": "Mikel Merino",
+      "puntos": 6.5
+    },
+    {
+      "id": "966837",
+      "nombre": "Martín Zubimendi",
+      "puntos": 6.8
+    },
+    {
+      "id": "856714",
+      "nombre": "Declan Rice",
+      "puntos": 7.1
+    },
+    {
+      "id": "966547",
+      "nombre": "Noni Madueke",
+      "puntos": 6.3
+    },
+    {
+      "id": "804508",
+      "nombre": "Viktor Gyökeres",
+      "puntos": 6.6
+    },
+    {
+      "id": "864921",
+      "nombre": "Eberechi Eze",
+      "puntos": 7.1
+    },
+    {
+      "id": "135666",
+      "nombre": "Leandro Trossard",
+      "puntos": 8.3
+    },
+    {
+      "id": "922573",
+      "nombre": "Gabriel Martinelli",
+      "puntos": 8.3
+    },
+    {
+      "id": "1002837",
+      "nombre": "Piero Hincapié",
+      "puntos": 0
+    },
+    {
+      "id": "135256",
+      "nombre": "Christian Nørgaard",
+      "puntos": 0
+    },
+    {
+      "id": "232422",
+      "nombre": "Kepa Arrizabalaga",
+      "puntos": 0
+    },
+    {
+      "id": "1150958",
+      "nombre": "Tommy Setford",
+      "puntos": 0
+    },
+    {
+      "id": "941168",
+      "nombre": "William Saliba",
+      "puntos": 0
+    },
+    {
+      "id": "1423711",
+      "nombre": "Myles Lewis-Skelly",
+      "puntos": 0
+    },
+    {
+      "id": "1917626",
+      "nombre": "Max Dowman",
+      "puntos": 0
+    },
+    {
+      "id": "1401702",
+      "nombre": "Ethan Nwaneri",
+      "puntos": 0
+    }
+  ]
+}
