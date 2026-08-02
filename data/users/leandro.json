@@ -88,51 +88,11 @@
   },
   "squad": [
     {
-      "id": 26768,
-      "nombre": "Sven Ulreich",
-      "posicion": "G",
-      "club": "FC Bayern München",
-      "equipo": 2672,
-      "extension": "png"
-    },
-    {
-      "id": 581310,
-      "nombre": "David Raya",
-      "posicion": "G",
-      "club": "Arsenal",
-      "equipo": 42,
-      "extension": "webp"
-    },
-    {
-      "id": 243609,
-      "nombre": "Alisson",
-      "posicion": "G",
-      "club": "Liverpool FC",
-      "equipo": 44,
-      "extension": "webp"
-    },
-    {
-      "id": 94758,
-      "nombre": "Ben Davies",
-      "posicion": "D",
-      "club": "Tottenham Hotspur",
-      "equipo": 33,
-      "extension": "png"
-    },
-    {
-      "id": 794939,
-      "nombre": "Marc Cucurella",
-      "posicion": "D",
-      "club": "Real Madrid",
-      "equipo": 2829,
-      "extension": "webp"
-    },
-    {
-      "id": 947477,
-      "nombre": "Sotiris Alexandropoulos",
+      "id": 906800,
+      "nombre": "Leandro Barreiro",
       "posicion": "M",
-      "club": "Sporting CP",
-      "equipo": 3001,
+      "club": "Benfica",
+      "equipo": 3006,
       "extension": "png"
     }
   ]
