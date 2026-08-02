@@ -114,6 +114,14 @@
       "club": "Arsenal",
       "equipo": 42,
       "extension": "webp"
+    },
+    {
+      "id": 8959,
+      "nombre": "Manuel Neuer",
+      "posicion": "G",
+      "club": "FC Bayern München",
+      "equipo": 2672,
+      "extension": "webp"
     }
   ]
 }
