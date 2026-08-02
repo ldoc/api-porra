@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
-import { getUser, saveUser, leerFichero, guardarFichero } from '../github.js';
+import { User } from '../db/index.js';
+import { Invitation } from '../db/index.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'porra-ucl-secret-change-in-production';
 
@@ -16,22 +17,6 @@ function verifyPassword(password, stored) {
   return hash === hashToVerify;
 }
 
-async function getInvitations() {
-  try {
-    return await leerFichero('data/users/_invitations.json');
-  } catch (e) {
-    return {};
-  }
-}
-
-async function saveInvitations(invitations) {
-  await guardarFichero(
-    'data/users/_invitations.json',
-    JSON.stringify(invitations, null, 2),
-    'Update invitations index'
-  );
-}
-
 export async function register(username, password, invitationCode) {
   if (!username || !password || !invitationCode) {
     return { ok: false, error: 'Usuario, contraseña y código de invitación son obligatorios' };
@@ -45,30 +30,30 @@ export async function register(username, password, invitationCode) {
 
   const clave = invitationCode.toUpperCase().trim();
 
-  const existingUser = await getUser(username.toLowerCase());
+  const existingUser = await User.findOne({ username: username.toLowerCase() });
   if (existingUser) {
     return { ok: false, error: 'El nombre de usuario ya existe' };
   }
 
-  const invitations = await getInvitations();
-  if (!(clave in invitations)) {
+  const invitation = await Invitation.findOne({ code: clave });
+  if (!invitation) {
     return { ok: false, error: 'Código de invitación inválido' };
   }
-  if (invitations[clave] !== null) {
+  if (invitation.usedBy !== null) {
     return { ok: false, error: 'Este código de invitación ya ha sido utilizado' };
   }
 
   const passwordHash = hashPassword(password);
 
-  await saveUser(username.toLowerCase(), {
+  await User.create({
     clave,
     username: username.toLowerCase(),
     passwordHash,
-    createdAt: new Date().toISOString()
+    createdAt: new Date()
   });
 
-  invitations[clave] = username.toLowerCase();
-  await saveInvitations(invitations);
+  invitation.usedBy = username.toLowerCase();
+  await invitation.save();
 
   const token = jwt.sign(
     { username: username.toLowerCase() },
@@ -88,7 +73,7 @@ export async function login(username, password) {
     return { ok: false, error: 'Usuario y contraseña son obligatorios' };
   }
 
-  const user = await getUser(username.toLowerCase());
+  const user = await User.findOne({ username: username.toLowerCase() });
   if (!user || !user.passwordHash) {
     return { ok: false, error: 'Credenciales incorrectas' };
   }
@@ -119,7 +104,7 @@ export async function getProfile(username) {
     return { ok: false, error: 'Usuario requerido' };
   }
 
-  const user = await getUser(username.toLowerCase());
+  const user = await User.findOne({ username: username.toLowerCase() });
   if (!user) {
     return { ok: false, error: 'Usuario no encontrado' };
   }
@@ -131,46 +116,18 @@ export async function getProfile(username) {
 }
 
 export async function getTakenAvatars() {
-  const invitations = await getInvitations();
-  const taken = [];
-
-  for (const [clave, username] of Object.entries(invitations)) {
-    if (!username) continue;
-    try {
-      const user = await getUser(username);
-      if (user && user.avatar) {
-        taken.push(user.avatar);
-      }
-    } catch (e) {
-      // skip broken user files
-    }
-  }
-
+  const taken = await User.find({ avatar: { $ne: null } }).distinct('avatar');
   return taken;
 }
 
 export async function getAllPlayers() {
-  const invitations = await getInvitations();
-  const players = [];
-
-  for (const [clave, username] of Object.entries(invitations)) {
-    if (!username) continue;
-    try {
-      const user = await getUser(username);
-      if (user && user.username) {
-        players.push({
-          name: user.username,
-          avatar: user.avatar || null,
-          points: user.points || 0,
-          hits: user.hits || 0,
-        });
-      }
-    } catch (e) {
-      // skip broken user files
-    }
-  }
-
-  return players;
+  const users = await User.find({}, 'username avatar points hits');
+  return users.map(user => ({
+    name: user.username,
+    avatar: user.avatar || null,
+    points: user.points || 0,
+    hits: user.hits || 0,
+  }));
 }
 
 export async function saveProfile(username, profileData) {
@@ -178,21 +135,17 @@ export async function saveProfile(username, profileData) {
     return { ok: false, error: 'Usuario requerido' };
   }
 
-  const user = await getUser(username.toLowerCase());
+  const user = await User.findOne({ username: username.toLowerCase() });
   if (!user) {
     return { ok: false, error: 'Usuario no encontrado' };
   }
 
-  const updatedUser = {
-    ...user,
-    avatar: profileData.avatar || user.avatar
-  };
-
-  await saveUser(username.toLowerCase(), updatedUser);
+  user.avatar = profileData.avatar || user.avatar;
+  await user.save();
 
   return {
     ok: true,
-    avatar: updatedUser.avatar
+    avatar: user.avatar
   };
 }
 
@@ -201,7 +154,7 @@ export async function getSquad(username) {
     return { ok: false, error: 'Usuario requerido' };
   }
 
-  const user = await getUser(username.toLowerCase());
+  const user = await User.findOne({ username: username.toLowerCase() });
   if (!user) {
     return { ok: false, error: 'Usuario no encontrado' };
   }
@@ -221,7 +174,7 @@ export async function saveSquad(username, squad) {
     return { ok: false, error: 'squad debe ser un array' };
   }
 
-  const user = await getUser(username.toLowerCase());
+  const user = await User.findOne({ username: username.toLowerCase() });
   if (!user) {
     return { ok: false, error: 'Usuario no encontrado' };
   }
@@ -233,10 +186,35 @@ export async function saveSquad(username, squad) {
   }
 
   user.squad = squad;
-  await saveUser(username.toLowerCase(), user);
+  await user.save();
 
   return {
     ok: true,
     squad: user.squad
   };
+}
+
+export async function changePassword(username, currentPassword, newPassword) {
+  if (!username || !currentPassword || !newPassword) {
+    return { ok: false, error: 'Usuario, contraseña actual y nueva contraseña son obligatorios' };
+  }
+
+  if (newPassword.length < 6) {
+    return { ok: false, error: 'La nueva contraseña debe tener al menos 6 caracteres' };
+  }
+
+  const user = await User.findOne({ username: username.toLowerCase() });
+  if (!user) {
+    return { ok: false, error: 'Usuario no encontrado' };
+  }
+
+  const isValid = verifyPassword(currentPassword, user.passwordHash);
+  if (!isValid) {
+    return { ok: false, error: 'La contraseña actual es incorrecta' };
+  }
+
+  user.passwordHash = hashPassword(newPassword);
+  await user.save();
+
+  return { ok: true, message: 'Contraseña actualizada correctamente' };
 }

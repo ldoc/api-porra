@@ -24,7 +24,8 @@ api-porra/
 ├── scripts/
 │   ├── calendario.js      # Scraping de calendario de partidos
 │   ├── equipos.js         # Scraping de equipos + escudos
-│   └── jugadores.js       # Scraping de jugadores + fotos
+│   ├── jugadores.js       # Scraping de jugadores + fotos
+│   └── matchStats.js      # Scraping de estadísticas de partidos
 ├── data/
 │   ├── sofascore/
 │   │   ├── calendar.json  # Calendario de partidos
@@ -62,6 +63,12 @@ api-porra/
 | GET    | `/api/config`         | Configuración del torneo (freeze date, etc.)   |
 | GET    | `/api/avatars/taken`  | Lista de avatares ya cogidos por usuarios      |
 | GET    | `/api/players`        | Lista de todos los jugadores registrados       |
+
+### Estadísticas de Partidos
+
+| Método | Ruta                          | Descripción                                    |
+|--------|-------------------------------|------------------------------------------------|
+| GET    | `/api/match-stats/:eventId`   | Scraping de estadísticas de un partido (Sofascore). Guarda en `data/sofascore/partidos/{eventId}.json` |
 
 ### Legacy (compatibilidad)
 
@@ -191,6 +198,27 @@ api-porra/
 }
 ```
 
+### Respuesta Match Stats
+
+```json
+// GET /api/match-stats/14566909
+{
+  "2825": {
+    "goles": 0
+  },
+  "42": {
+    "goles": 2
+  },
+  "jugadores": [
+    {
+      "id": "797291",
+      "nombre": "Unai Simón",
+      "puntos": 6.1
+    }
+  ]
+}
+```
+
 ## Variables de Entorno
 
 | Variable         | Descripción                                    | Ejemplo                          |
@@ -246,6 +274,16 @@ const squad = await getSquad(username); // [{ id, nombre, posicion, club, equipo
 
 // Guardar plantilla ideal del usuario
 const result = await saveSquad(username, squad); // { ok, squad }
+```
+
+## Funciones de Scraping (scripts/)
+
+```js
+import { scrapMatchStats } from './scripts/matchStats.js';
+
+// Scraping de estadísticas de un partido (evento + alineaciones)
+const stats = await scrapMatchStats(eventId);
+// Returns: { eventId, lastUpdated, event, lineups }
 ```
 
 ## Seguridad

@@ -1,14 +1,15 @@
 import 'dotenv/config';
 import http from 'http';
 import https from 'https';
-import { guardarFichero, leerFichero, getUser, saveUser } from './github.js';
-import { register, login, getProfile, saveProfile, getTakenAvatars, getAllPlayers, getSquad, saveSquad } from './api/auth.js';
+import { connectDB, User, Invitation } from './db/index.js';
+import { guardarFichero, leerFichero } from './github.js';
+import { register, login, getProfile, saveProfile, getTakenAvatars, getAllPlayers, getSquad, saveSquad, changePassword } from './api/auth.js';
+import { scrapMatchStats } from './scripts/matchStats.js';
 
 const PORT = process.env.PORT || 3000;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://porra-spa.vercel.app';
 
 const nuevoUsuario = () => {
-  // generamos un código alfanumerico de 4 caracteres
   let codigo = Math.random().toString(36).slice(-4).toUpperCase();
   return codigo;
 }
@@ -33,6 +34,8 @@ function parseBody(req) {
     req.on('error', reject);
   });
 }
+
+await connectDB();
 
 const server = http.createServer(async (req, res) => {
   const reqUrl = new URL(req.url, `http://${req.headers.host}`);
@@ -97,7 +100,21 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // Endpoint: Configuración del torneo
+  // Endpoint: Cambiar contraseña
+  if (reqUrl.pathname === '/api/auth/change-password' && req.method === 'POST') {
+    const body = await parseBody(req);
+    if (!body || !body.username || !body.currentPassword || !body.newPassword) {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ ok: false, error: 'Body inválido, se requiere username, currentPassword y newPassword' }));
+      return;
+    }
+    const result = await changePassword(body.username, body.currentPassword, body.newPassword);
+    res.writeHead(result.ok ? 200 : 400, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(result));
+    return;
+  }
+
+  // Endpoint: Configuración del torneo (se mantiene en GitHub)
   if (reqUrl.pathname === '/api/config' && req.method === 'GET') {
     try {
       const config = await leerFichero('config.json');
@@ -134,7 +151,7 @@ const server = http.createServer(async (req, res) => {
       res.end(JSON.stringify({ ok: false, error: 'Parámetro username requerido' }));
       return;
     }
-    const user = await getUser(username.toLowerCase());
+    const user = await User.findOne({ username: username.toLowerCase() });
     if (!user) {
       res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ ok: false, error: 'Usuario no encontrado' }));
@@ -153,14 +170,14 @@ const server = http.createServer(async (req, res) => {
       res.end(JSON.stringify({ ok: false, error: 'Body inválido, se requiere username y predictions' }));
       return;
     }
-    const user = await getUser(body.username.toLowerCase());
+    const user = await User.findOne({ username: body.username.toLowerCase() });
     if (!user) {
       res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ ok: false, error: 'Usuario no encontrado' }));
       return;
     }
     user.predictions = body.predictions;
-    await saveUser(body.username.toLowerCase(), user);
+    await user.save();
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify({ ok: true }));
     return;
@@ -194,35 +211,41 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // // Endpoint /clave
-  // if (reqUrl.pathname === '/clave') {
-  //   res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-  //   const keysEncontradas = Object.keys(process.env).filter(k => !k.startsWith('npm_') && !k.startsWith('NODE_') && !k.startsWith('x_'));
-  //   res.end(JSON.stringify({
-  //     clave: process.env.CLAVE || process.env.clave || null,
-  //     keysEncontradas: keysEncontradas
-  //   }, null, 2));
-  //   return;
-  // }
-
+  // Endpoint: Estadísticas de un partido (scraping Sofascore - se mantiene en GitHub)
+  if (reqUrl.pathname.startsWith('/api/match-stats/') && req.method === 'GET') {
+    const eventId = reqUrl.pathname.split('/api/match-stats/')[1];
+    if (!eventId || isNaN(eventId)) {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ ok: false, error: 'ID de partido inválido' }));
+      return;
+    }
+    try {
+      const stats = await scrapMatchStats(Number(eventId));
+      await guardarFichero(
+        `data/sofascore/partidos/${eventId}.json`,
+        JSON.stringify(stats, null, 2),
+        `Match stats: ${eventId}`
+      );
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(stats));
+    } catch (e) {
+      const status = e.message === 'NOT_FOUND' ? 404 : 500;
+      const error = e.message === 'NOT_FOUND' ? 'Partido no encontrado en Sofascore' : 'Error al obtener estadísticas del partido';
+      res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ ok: false, error }));
+    }
+    return;
+  }
 
   // Endpoint para nuevoUsuario
   if (reqUrl.pathname === '/nuevoUsuario') {
-    let invitations = {};
-    try {
-      invitations = await leerFichero('data/users/_invitations.json') || {};
-    } catch (e) {
-      invitations = {};
-    }
-
     const claveUsuario = nuevoUsuario();
-    invitations[claveUsuario] = null;
 
-    await guardarFichero(
-      'data/users/_invitations.json',
-      JSON.stringify(invitations, null, 2),
-      `New invitation code: ${claveUsuario}`
-    );
+    await Invitation.create({
+      code: claveUsuario,
+      usedBy: null,
+      createdAt: new Date()
+    });
 
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify({ clave: claveUsuario }, null, 2));
@@ -241,8 +264,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    // Leemos el fichero del usuario
-    const usuario = await leerFichero(`data/users/${clave}.json`);
+    const usuario = await User.findOne({ clave: clave });
     if (!usuario) {
       res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({
@@ -259,21 +281,14 @@ const server = http.createServer(async (req, res) => {
 
   // Debug: listar usuarios e invitaciones
   if (reqUrl.pathname === '/api/debug/users') {
-    const invitations = await leerFichero('data/users/_invitations.json').catch(() => ({}));
-    const users = [];
-    for (const [clave, username] of Object.entries(invitations || {})) {
-      let userData = null;
-      if (username) {
-        userData = await leerFichero(`data/users/${username}.json`).catch(() => null);
-      }
-      users.push({ clave, registeredTo: username, userData });
-    }
+    const invitations = await Invitation.find({});
+    const users = await User.find({});
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify({ invitations, users }, null, 2));
     return;
   }
 
-  // Respuesta por defecto si no coincide con los endpoints anteriores
+  // Respuesta por defecto
   res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
   res.end(JSON.stringify({
     status: 'ok',
@@ -285,13 +300,15 @@ const server = http.createServer(async (req, res) => {
       login: 'POST /api/auth/login',
       getProfile: 'GET /api/auth/profile?username=xxxx',
       saveProfile: 'POST /api/auth/profile',
+      changePassword: 'POST /api/auth/change-password',
       config: 'GET /api/config',
       avatarsTaken: 'GET /api/avatars/taken',
       players: 'GET /api/players',
       getPredictions: 'GET /api/predictions?username=xxxx',
       savePredictions: 'PUT /api/predictions',
       getSquad: 'GET /api/squad?username=xxxx',
-      saveSquad: 'PUT /api/squad'
+      saveSquad: 'PUT /api/squad',
+      matchStats: 'GET /api/match-stats/:eventId'
     },
     timestamp: new Date().toISOString()
   }, null, 2));
