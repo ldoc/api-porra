@@ -65,5 +65,31 @@
       "home": 0,
       "away": 1
     }
-  }
+  },
+  "squad": [
+    {
+      "id": 26768,
+      "nombre": "Sven Ulreich",
+      "posicion": "G",
+      "club": "FC Bayern München",
+      "equipo": 2672,
+      "extension": "png"
+    },
+    {
+      "id": 581310,
+      "nombre": "David Raya",
+      "posicion": "G",
+      "club": "Arsenal",
+      "equipo": 42,
+      "extension": "webp"
+    },
+    {
+      "id": 243609,
+      "nombre": "Alisson",
+      "posicion": "G",
+      "club": "Liverpool FC",
+      "equipo": 44,
+      "extension": "webp"
+    }
+  ]
 }
