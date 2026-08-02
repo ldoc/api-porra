@@ -92,35 +92,11 @@
       "extension": "webp"
     },
     {
-      "id": 794939,
-      "nombre": "Marc Cucurella",
+      "id": 2046494,
+      "nombre": "Yusuf Dağhan Kahraman",
       "posicion": "D",
-      "club": "Real Madrid",
-      "equipo": 2829,
-      "extension": "webp"
-    },
-    {
-      "id": 262911,
-      "nombre": "Andy Robertson",
-      "posicion": "D",
-      "club": "Tottenham Hotspur",
-      "equipo": 33,
-      "extension": "webp"
-    },
-    {
-      "id": 925097,
-      "nombre": "Ronald Araújo",
-      "posicion": "D",
-      "club": "FC Barcelona",
-      "equipo": 2817,
-      "extension": "webp"
-    },
-    {
-      "id": 580550,
-      "nombre": "Clément Lenglet",
-      "posicion": "D",
-      "club": "Benfica",
-      "equipo": 3006,
+      "club": "Galatasaray U19",
+      "equipo": 3061,
       "extension": "png"
     }
   ]
