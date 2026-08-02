@@ -5,6 +5,10 @@
   "createdAt": "2026-07-31T14:47:09.163Z",
   "avatar": "🎸",
   "predictions": {
+    "14566652": {
+      "home": 0,
+      "away": 1
+    },
     "14566727": {
       "home": 1,
       "away": 1
