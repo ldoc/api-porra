@@ -20,14 +20,6 @@
   },
   "squad": [
     {
-      "id": 581310,
-      "nombre": "David Raya",
-      "posicion": "G",
-      "club": "Arsenal",
-      "equipo": 42,
-      "extension": "webp"
-    },
-    {
       "id": 8959,
       "nombre": "Manuel Neuer",
       "posicion": "G",
