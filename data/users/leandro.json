@@ -92,11 +92,27 @@
       "extension": "webp"
     },
     {
-      "id": 2046494,
-      "nombre": "Yusuf Dağhan Kahraman",
+      "id": 94758,
+      "nombre": "Ben Davies",
       "posicion": "D",
-      "club": "Galatasaray U19",
-      "equipo": 3061,
+      "club": "Tottenham Hotspur",
+      "equipo": 33,
+      "extension": "png"
+    },
+    {
+      "id": 794939,
+      "nombre": "Marc Cucurella",
+      "posicion": "D",
+      "club": "Real Madrid",
+      "equipo": 2829,
+      "extension": "webp"
+    },
+    {
+      "id": 947477,
+      "nombre": "Sotiris Alexandropoulos",
+      "posicion": "M",
+      "club": "Sporting CP",
+      "equipo": 3001,
       "extension": "png"
     }
   ]
