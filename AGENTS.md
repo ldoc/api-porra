@@ -130,8 +130,8 @@ api-porra/
 {
   "ok": true,
   "config": {
-    "championsFreezeDate": "2026-09-15T21:00:00Z",
-    "championsFreezeLabel": "Fase de Grupos",
+    "championsFreezeDate": "2026-09-08T00:00:00Z",
+    "championsFreezeLabel": "Fase de Liga",
     "totalMatches": 144,
     "squadSize": 25,
     "squadFormation": {
@@ -269,6 +269,62 @@ const result = await saveSquad(username, squad); // { ok, squad }
 - **Temporada**: Season ID `76953`
 - **API base**: `https://www.sofascore.com/api/v1/`
 - **Imágenes base**: `https://img.sofascore.com/api/v1/`
+
+## Reglas de la Porra - Fase de Liga
+
+### Formato de la Fase de Liga
+
+Todos los partidos de esta fase se juegan de acuerdo con un sistema de liga en el que cada club se enfrenta a ocho rivales distintos en enfrentamientos de partido único. Cada club juega cuatro partidos como local y cuatro partidos como visitante. Los enfrentamientos se definirán por sorteo. La fecha de celebración de este sorteo está prevista para el 27 de agosto de 2026. El comienzo de la fase de liga esta previsto para el 8 de septiembre de 2026.
+
+De acuerdo con los resultados de estos partidos los clubes se clasificarán en un sistema de liga única obteniendo 3 puntos por victoria, 1 punto por empate y 0 puntos por derrota.
+
+### Criterios de Desempate
+
+Si dos o más equipos están empatados al finalizar los partidos de la fase de liga, se aplican los siguientes criterios, en este orden, para determinar la clasificación final:
+
+1. Mayor diferencia de goles
+2. Mayor número de goles marcados
+3. Mayor número de goles marcados como visitante
+4. Mayor número de victorias
+5. Mayor número de victorias como visitante
+6. Mayor suma de puntos obtenidos por todos los rivales de la fase de liga
+7. Mayor suma de diferencia de goles obtenida por todos los rivales de la fase de liga
+8. Mayor suma de goles marcados por todos los rivales de la fase de liga
+9. Menor número de puntos disciplinarios basado en el número total de tarjetas amarillas y tarjetas rojas recibidas (tarjeta amarilla = 1 punto, tarjeta roja = 3 puntos, expulsión por doble amarilla = 3 puntos)
+10. Mayor coeficiente UEFA del club
+
+### Pronóstico de Resultados de la Fase de Liga
+
+Cada participante deberá pronosticar el resultado de cada uno de los 144 partidos previstos para la fase de liga. En base a estos resultados se obtendrá un pronóstico de clasificación para la fase de liga.
+
+### Puntuación por Pronóstico de Partidos
+
+| Concepto | Puntos |
+|----------|--------|
+| Acierto de resultado (victoria local, empate o victoria visitante) | 8 |
+| Acierto de goles marcados por el equipo local | 3 |
+| Acierto de goles marcados por el equipo visitante | 3 |
+| Acierto de goles marcados por ambos equipos | 1 |
+| **Puntuación máxima por partido** | **15** |
+
+### Puntuación por Pronóstico de Clasificación
+
+Adicionalmente a la puntuación de los partidos, al finalizar la fase de liga se obtendrán puntos por acertar la posición final de cada equipo en la liga.
+
+**Únicamente obtendrán puntos los equipos que hayan finalizado en una posición igual o superior al puesto 24.** Los puntos se asignan del siguiente modo:
+
+| Posición | Puntos | Posición | Puntos | Posición | Puntos | Posición | Puntos |
+|----------|--------|----------|--------|----------|--------|----------|--------|
+| 1º | 60 | 7º | 21 | 13º | 12 | 19º | 6 |
+| 2º | 51 | 8º | 18 | 14º | 11 | 20º | 5 |
+| 3º | 43 | 9º | 16 | 15º | 10 | 21º | 4 |
+| 4º | 36 | 10º | 15 | 16º | 9 | 22º | 3 |
+| 5º | 30 | 11º | 14 | 17º | 8 | 23º | 2 |
+| 6º | 25 | 12º | 13 | 18º | 7 | 24º | 1 |
+
+**Regla de puntuación por clasificación**: Solo se recibirán los puntos por el valor más bajo de posición que ocupe un equipo teniendo en cuenta la posición pronosticada y la real.
+
+> Ejemplo: Si se ha pronosticado que un equipo acaba en la posición 7 y finalmente acaba en la posición 3, solo se recibirán los puntos de la posición 7 (21 puntos). Si el equipo acaba en la posición 12, solo se recibirán los puntos de la posición 12 (13 puntos).
 
 ## Configuración
 

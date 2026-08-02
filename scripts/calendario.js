@@ -64,7 +64,7 @@ function fetchSofascore(endpointUrl) {
 async function obtenerCalendario() {
   try {
     //https://www.sofascore.com/api/v1/unique-tournament/7/season/76953/events/round/1
-    // hay 8 rondas en la fase de grupos
+    // hay 8 rondas en la fase de liga
     let partidosArray = [];
     for (let i = 1; i <= 8; i++) {
       const url = `https://www.sofascore.com/api/v1/unique-tournament/7/season/76953/events/round/${i}`;
