@@ -98,6 +98,14 @@
       "club": "Benfica",
       "equipo": 3006,
       "extension": "png"
+    },
+    {
+      "id": 581310,
+      "nombre": "David Raya",
+      "posicion": "G",
+      "club": "Arsenal",
+      "equipo": 42,
+      "extension": "webp"
     }
   ]
 }
