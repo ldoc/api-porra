@@ -1,8 +1,8 @@
 import 'dotenv/config';
 import http from 'http';
 import https from 'https';
-import { connectDB, User, Invitation } from './db/index.js';
-import { guardarFichero, leerFichero } from './github.js';
+import { connectDB, User, Invitation, MatchStats } from './db/index.js';
+import { leerFichero } from './github.js';
 import { register, login, getProfile, saveProfile, getTakenAvatars, getAllPlayers, getSquad, saveSquad, changePassword } from './api/auth.js';
 import { scrapMatchStats } from './scripts/matchStats.js';
 
@@ -221,10 +221,10 @@ const server = http.createServer(async (req, res) => {
     }
     try {
       const stats = await scrapMatchStats(Number(eventId));
-      await guardarFichero(
-        `data/sofascore/partidos/${eventId}.json`,
-        JSON.stringify(stats, null, 2),
-        `Match stats: ${eventId}`
+      await MatchStats.findOneAndUpdate(
+        { eventId: Number(eventId) },
+        { eventId: Number(eventId), stats, lastUpdated: new Date() },
+        { upsert: true, new: true }
       );
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(stats));
@@ -233,6 +233,38 @@ const server = http.createServer(async (req, res) => {
       const error = e.message === 'NOT_FOUND' ? 'Partido no encontrado en Sofascore' : 'Error al obtener estadísticas del partido';
       res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ ok: false, error }));
+    }
+    return;
+  }
+
+  // Endpoint: Obtener todos los matchstats
+  if (reqUrl.pathname === '/api/match-stats' && req.method === 'GET') {
+    try {
+      const matchStats = await MatchStats.find({});
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ ok: true, matchStats }));
+    } catch (e) {
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ ok: false, error: 'Error al obtener estadísticas' }));
+    }
+    return;
+  }
+
+  // Endpoint: Obtener predicciones de todos los usuarios
+  if (reqUrl.pathname === '/api/predictions/all' && req.method === 'GET') {
+    try {
+      const users = await User.find({}, 'username predictions');
+      const predictions = {};
+      for (const user of users) {
+        if (user.predictions && Object.keys(user.predictions).length > 0) {
+          predictions[user.username] = user.predictions;
+        }
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ ok: true, predictions }));
+    } catch (e) {
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ ok: false, error: 'Error al obtener predicciones' }));
     }
     return;
   }

@@ -32,8 +32,7 @@ api-porra/
 │   │   ├── teams.json     # Equipos
 │   │   ├── jugadores.json # Jugadores
 │   │   ├── imgEquipos/    # Escudos (PNG/WEBP)
-│   │   ├── imgJugadores/  # Fotos de jugadores (PNG/WEBP)
-│   │   └── partidos/      # Datos de partidos
+│   │   └── imgJugadores/  # Fotos de jugadores (PNG/WEBP)
 │   └── users/             # Usuarios registrados ({username}.json)
 └── package.json
 ```
@@ -56,6 +55,14 @@ api-porra/
 | GET    | `/api/squad`          | Obtener plantilla ideal del usuario (username) |
 | PUT    | `/api/squad`          | Guardar plantilla ideal del usuario (username, squad) |
 
+### Predicciones
+
+| Método | Ruta                  | Descripción                                    |
+|--------|-----------------------|------------------------------------------------|
+| GET    | `/api/predictions`    | Obtener predicciones de un usuario (username)  |
+| PUT    | `/api/predictions`    | Guardar predicciones de un usuario (username, predictions) |
+| GET    | `/api/predictions/all`| Obtener predicciones de todos los usuarios (para cálculo de puntos) |
+
 ### Configuración y Avatares
 
 | Método | Ruta                  | Descripción                                    |
@@ -68,7 +75,8 @@ api-porra/
 
 | Método | Ruta                          | Descripción                                    |
 |--------|-------------------------------|------------------------------------------------|
-| GET    | `/api/match-stats/:eventId`   | Scraping de estadísticas de un partido (Sofascore). Guarda en `data/sofascore/partidos/{eventId}.json` |
+| GET    | `/api/match-stats/:eventId`   | Scraping de estadísticas de un partido (Sofascore). Guarda en MongoDB (colección `matchstats`) |
+| GET    | `/api/match-stats`            | Obtener todos los matchstats almacenados en MongoDB (para cálculo de puntos) |
 
 ### Legacy (compatibilidad)
 
@@ -92,6 +100,34 @@ api-porra/
     { "id": 804509, "nombre": "Omar Marmoush", "posicion": "F", "club": "Man City", "equipo": 130 },
     ...
   ]
+}
+```
+
+### Modelo de Datos de MatchStats
+
+```json
+{
+  "eventId": 14566909,
+  "stats": {
+    "42": { "goles": 2 },
+    "2825": { "goles": 0 },
+    "jugadores": [
+      {
+        "id": "797291",
+        "nombre": "Unai Simón",
+        "posicion": "G",
+        "equipo": 42,
+        "puntos": 6.1,
+        "goles": 0,
+        "minutos": 90,
+        "paradas": 4,
+        "esSuplente": false,
+        "penaltiMarcado": 0,
+        "penaltiParado": 1
+      }
+    ]
+  },
+  "lastUpdated": "2026-08-03T07:55:04.289Z"
 }
 ```
 
@@ -203,23 +239,70 @@ api-porra/
 ```json
 // GET /api/match-stats/14566909
 {
-  "2825": {
-    "goles": 0
-  },
-  "42": {
-    "goles": 2
-  },
+  "2825": { "goles": 0 },
+  "42": { "goles": 2 },
   "jugadores": [
     {
       "id": "797291",
       "nombre": "Unai Simón",
-      "puntos": 6.1
+      "posicion": "G",
+      "equipo": 42,
+      "puntos": 6.1,
+      "goles": 0,
+      "minutos": 90,
+      "paradas": 4,
+      "esSuplente": false,
+      "penaltiMarcado": 0,
+      "penaltiParado": 1
     }
   ]
 }
 ```
 
-## Variables de Entorno
+### Respuesta Match Stats All
+
+```json
+// GET /api/match-stats
+{
+  "ok": true,
+  "matchStats": [
+    {
+      "eventId": 14566909,
+      "stats": {
+        "2825": { "goles": 0 },
+        "42": { "goles": 2 },
+        "jugadores": [...]
+      }
+    },
+    // ... más partidos
+  ]
+}
+```
+
+### Respuesta Predictions All
+
+```json
+// GET /api/predictions/all
+{
+  "ok": true,
+  "predictions": {
+    "juan123": {
+      "14566909": { "home": 2, "away": 1 },
+      "14566894": { "home": 0, "away": 0 }
+    },
+    "maria456": {
+      "14566909": { "home": 1, "away": 2 },
+      "14566894": { "home": 1, "away": 1 }
+    }
+  }
+}
+```
+
+## MongoDB
+
+El proyecto usa MongoDB Atlas para persistir datos de usuarios, invitaciones y estadísticas de partidos.
+
+### Variables de Entorno
 
 | Variable         | Descripción                                    | Ejemplo                          |
 |------------------|------------------------------------------------|----------------------------------|
@@ -227,6 +310,7 @@ api-porra/
 | `JWT_SECRET`     | Secreto para firmar tokens JWT                 | `mi-secreto-seguro`             |
 | `FRONTEND_URL`   | URL del frontend para CORS                     | `https://porra-spa.vercel.app`  |
 | `PORT`           | Puerto del servidor (default: 3000)            | `3000`                          |
+| `MONGODB_URI`    | URI de conexión a MongoDB Atlas                | `mongodb+srv://...`             |
 
 ## Funciones de GitHub (github.js)
 
@@ -363,6 +447,37 @@ Adicionalmente a la puntuación de los partidos, al finalizar la fase de liga se
 **Regla de puntuación por clasificación**: Solo se recibirán los puntos por el valor más bajo de posición que ocupe un equipo teniendo en cuenta la posición pronosticada y la real.
 
 > Ejemplo: Si se ha pronosticado que un equipo acaba en la posición 7 y finalmente acaba en la posición 3, solo se recibirán los puntos de la posición 7 (21 puntos). Si el equipo acaba en la posición 12, solo se recibirán los puntos de la posición 12 (13 puntos).
+
+### Puntuación de la Plantilla Ideal
+
+Se seleccionará una plantilla compuesta por un total de 25 jugadores formada por 3 porteros, 8 defensas, 8 centrocampistas y 6 delanteros. En la plantilla no podrá haber más de un jugador del mismo club.
+
+Los jugadores seleccionados recibirán puntos a lo largo de la competición de acuerdo con los siguientes criterios:
+
+#### Puntuación Sofascore
+
+Puntuación obtenida en cada partido según la aplicación Sofascore. 6 puntos Sofascore equivalen a 0 puntos. Si la puntuación Sofascore es superior a 6, se obtiene 1 punto por cada 0,3 puntos Sofascore recibidos. La puntuación máxima en Sofascore es de 10 puntos, por lo que el número máximo de puntos que se podrán recibir será de 13. En el caso de que la puntuación Sofascore sea inferior a 6, la puntuación recibida por el jugador será negativa. Hasta 5,7 puntos Sofascore el jugador recibirá un punto negativo (-1). Por debajo de ese valor, por cada 0,3 puntos Sofascore menos, el jugador recibirá un punto negativo adicional.
+
+#### Puntuación por goles marcados
+
+Por cada gol marcado en un partido el jugador recibirá 1 punto adicional. Dependiendo de su demarcación obtendrá puntos adicionales del siguiente modo:
+
+| Demarcación | Puntos adicionales por gol |
+|-------------|---------------------------|
+| Delantero | +1 |
+| Centrocampista | +2 |
+| Defensa | +3 |
+| Portero | +4 |
+
+En el caso de que el gol se marque de penalti el jugador no recibe esta puntuación adicional por demarcación.
+
+#### Porteros (penaltis parados y goles recibidos)
+
+Esta puntuación aplica solo a los porteros. Los porteros recibirán una puntuación adicional negativa de 1 punto (-1) por cada gol recibido. En el caso de que el portero pare un penalti recibirá una puntuación adicional positiva de 3 puntos (+3).
+
+#### Puntuación por portería a cero
+
+Si al finalizar el partido el equipo no ha recibido goles, el portero recibirá una puntuación adicional positiva de 5 puntos (+5), y los defensas una puntuación adicional positiva de 2 puntos (+2), siempre y cuando en ambos casos hayan jugado más de 70 minutos.
 
 ## Configuración
 

@@ -30,29 +30,34 @@ async function migrate() {
   for (const [code, username] of Object.entries(invitationsData)) {
     if (!username) continue;
 
-    const existing = await User.findOne({ username });
-    if (existing) {
-      console.log(`  ${username} ya existe, saltando...`);
-      continue;
-    }
-
     const userData = await leerFichero(`data/users/${username}.json`);
     if (!userData) {
       console.log(`  No se pudo leer ${username}, saltando...`);
       continue;
     }
 
-    await User.create({
-      clave: userData.clave || code,
-      username: userData.username || username,
-      passwordHash: userData.passwordHash,
-      avatar: userData.avatar || null,
-      squad: userData.squad || [],
-      predictions: userData.predictions || null,
-      createdAt: userData.createdAt ? new Date(userData.createdAt) : new Date()
-    });
-
-    console.log(`  ${username} migrado ✓`);
+    const existing = await User.findOne({ username });
+    if (existing) {
+      existing.clave = userData.clave || code;
+      existing.passwordHash = userData.passwordHash;
+      existing.avatar = userData.avatar || null;
+      existing.squad = userData.squad || [];
+      existing.predictions = userData.predictions || null;
+      existing.createdAt = userData.createdAt ? new Date(userData.createdAt) : existing.createdAt;
+      await existing.save();
+      console.log(`  ${username} actualizado ✓`);
+    } else {
+      await User.create({
+        clave: userData.clave || code,
+        username: userData.username || username,
+        passwordHash: userData.passwordHash,
+        avatar: userData.avatar || null,
+        squad: userData.squad || [],
+        predictions: userData.predictions || null,
+        createdAt: userData.createdAt ? new Date(userData.createdAt) : new Date()
+      });
+      console.log(`  ${username} migrado ✓`);
+    }
   }
 
   const userCount = await User.countDocuments();

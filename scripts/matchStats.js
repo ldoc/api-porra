@@ -58,36 +58,114 @@ function fetchSofascore(endpointUrl) {
     });
 }
 
-function processPlayer(playerEntry) {
+function processPlayer(playerEntry, teamId) {
     const p = playerEntry.player;
     const s = playerEntry.statistics || {};
 
     return {
         id: String(p.id),
         nombre: p.name,
-        puntos: s.rating || 0
+        posicion: playerEntry.position,
+        equipo: teamId,
+        puntos: s.rating || 0,
+        goles: s.goals || 0,
+        minutos: s.minutesPlayed || 0,
+        paradas: s.saves || 0,
+        esSuplente: playerEntry.substitute || false,
+        penaltiMarcado: 0,
+        penaltiParado: 0
     };
+}
+
+async function fetchPlayerStatistics(eventId, playerId) {
+    const statsUrl = `https://www.sofascore.com/api/v1/event/${eventId}/player/${playerId}/statistics`;
+    try {
+        const data = await fetchSofascore(statsUrl);
+        return data?.statistics?.penaltySave || 0;
+    } catch (error) {
+        if (error.message === 'NOT_FOUND') {
+            return 0;
+        }
+        console.error(`Error obteniendo stats del jugador ${playerId}:`, error.message);
+        return 0;
+    }
+}
+
+function processIncidents(incidentsData) {
+    const penaltiesScored = {};
+    const penaltiesSaved = {};
+    const goalsByGoalkeeper = {};
+
+    if (!incidentsData || !incidentsData.incidents) {
+        return { penaltiesScored, penaltiesSaved, goalsByGoalkeeper };
+    }
+
+    for (const incident of incidentsData.incidents) {
+        if (incident.incidentType === 'goal' && incident.incidentClass === 'penalty') {
+            const pid = String(incident.player?.id);
+            if (pid) penaltiesScored[pid] = (penaltiesScored[pid] || 0) + 1;
+        }
+
+        if (incident.incidentType === 'inGamePenalty' && incident.incidentClass === 'missed') {
+            const gk = incident.footballPassingNetworkAction?.[0]?.goalkeeper;
+            if (gk) {
+                const gkId = String(gk.id);
+                penaltiesSaved[gkId] = (penaltiesSaved[gkId] || 0) + 1;
+            }
+        }
+
+        if (incident.incidentType === 'goal' && incident.incidentClass === 'regular') {
+            const gk = incident.footballPassingNetworkAction?.[0]?.goalkeeper;
+            if (gk) {
+                const gkId = String(gk.id);
+                goalsByGoalkeeper[gkId] = (goalsByGoalkeeper[gkId] || 0) + 1;
+            }
+        }
+    }
+
+    return { penaltiesScored, penaltiesSaved, goalsByGoalkeeper };
 }
 
 export async function scrapMatchStats(eventId) {
     const eventUrl = `https://www.sofascore.com/api/v1/event/${eventId}`;
     const lineupsUrl = `https://www.sofascore.com/api/v1/event/${eventId}/lineups`;
+    const incidentsUrl = `https://www.sofascore.com/api/v1/event/${eventId}/incidents`;
 
-    const [eventData, lineupsData] = await Promise.all([
+    const [eventData, lineupsData, incidentsData] = await Promise.all([
         fetchSofascore(eventUrl),
-        fetchSofascore(lineupsUrl)
+        fetchSofascore(lineupsUrl),
+        fetchSofascore(incidentsUrl).catch(() => null)
     ]);
 
     const ev = eventData.event;
-    const homeId = String(ev.homeTeam?.id);
-    const awayId = String(ev.awayTeam?.id);
+    const homeTeamId = ev.homeTeam?.id;
+    const awayTeamId = ev.awayTeam?.id;
+    const homeId = String(homeTeamId);
+    const awayId = String(awayTeamId);
 
-    const homePlayers = (lineupsData.home?.players || []).map(processPlayer);
-    const awayPlayers = (lineupsData.away?.players || []).map(processPlayer);
+    const homePlayers = (lineupsData.home?.players || []).map(p => processPlayer(p, homeTeamId));
+    const awayPlayers = (lineupsData.away?.players || []).map(p => processPlayer(p, awayTeamId));
+
+    const allPlayers = [...homePlayers, ...awayPlayers];
+
+    const goalkeepers = allPlayers.filter(p => p.posicion === 'G' && p.minutos > 0);
+    const gkStatsPromises = goalkeepers.map(async (gk) => {
+        const penaltySave = await fetchPlayerStatistics(eventId, gk.id);
+        gk.penaltiParado = penaltySave;
+    });
+    await Promise.all(gkStatsPromises);
+
+    const { penaltiesScored, goalsByGoalkeeper } = processIncidents(incidentsData);
+    for (const player of allPlayers) {
+        player.penaltiMarcado = penaltiesScored[player.id] || 0;
+        if (player.posicion === 'G') {
+            player.golesRecibidos = goalsByGoalkeeper[player.id] || 0;
+        }
+    }
 
     return {
         [homeId]: { goles: ev.homeScore?.current ?? 0 },
         [awayId]: { goles: ev.awayScore?.current ?? 0 },
-        jugadores: [...homePlayers, ...awayPlayers]
+        jugadores: allPlayers
     };
 }

@@ -28,7 +28,8 @@ const userSchema = new mongoose.Schema({
       nombre: String,
       posicion: String,
       club: String,
-      equipo: Number
+      equipo: Number,
+      extension: String
     }],
     default: []
   },
