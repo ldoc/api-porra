@@ -23,6 +23,30 @@ const globalLimiter = rateLimiter({ windowMs: 60 * 1000, max: 120 });
 const nuevoUsuarioLimiter = rateLimiter({ windowMs: 60 * 60 * 1000, max: 10 });
 const authenticatedLimiter = authRateLimiter({ windowMs: 60 * 1000, max: 30 });
 
+// Cache de config con TTL de 60s
+let _configCache = null;
+let _configCacheTime = 0;
+const CONFIG_CACHE_TTL = 60_000;
+
+async function getConfig() {
+  if (_configCache && Date.now() - _configCacheTime < CONFIG_CACHE_TTL) {
+    return _configCache;
+  }
+  try {
+    _configCache = await leerFichero('config.json');
+    _configCacheTime = Date.now();
+  } catch {
+    _configCache = null;
+  }
+  return _configCache;
+}
+
+async function esFrozen() {
+  const config = await getConfig();
+  if (!config || !config.championsStartRoundsDate) return false;
+  return new Date() >= new Date(config.championsStartRoundsDate);
+}
+
 function setCorsHeaders(req, res) {
   const origin = req.headers['origin'];
   const allowedOrigins = [
@@ -210,7 +234,7 @@ const server = http.createServer(async (req, res) => {
   // Endpoint: Configuración del torneo (se mantiene en GitHub)
   if (reqUrl.pathname === '/api/config' && req.method === 'GET') {
     try {
-      const config = await leerFichero('config.json');
+      const config = await getConfig();
       sendJson(req, res, 200, { ok: true, config }, 3600);
     } catch (e) {
       sendJson(req, res, 500, { ok: false, error: 'No se pudo cargar la configuración' });
@@ -228,7 +252,16 @@ const server = http.createServer(async (req, res) => {
   // Endpoint: Todos los jugadores registrados (para clasificación)
   if (reqUrl.pathname === '/api/players' && req.method === 'GET') {
     const players = await getAllPlayers();
-    sendJson(req, res, 200, { ok: true, players }, 300);
+    const frozen = await esFrozen();
+    if (!frozen) {
+      // Pre-freeze: solo nombre y avatar (sin puntos ni aciertos)
+      sendJson(req, res, 200, {
+        ok: true,
+        players: players.map(p => ({ name: p.name, avatar: p.avatar }))
+      }, 300);
+    } else {
+      sendJson(req, res, 200, { ok: true, players }, 300);
+    }
     return;
   }
 
@@ -239,6 +272,13 @@ const server = http.createServer(async (req, res) => {
     if (!username) {
       sendJson(req, res, 400, { ok: false, error: 'Parámetro username requerido' });
       return;
+    }
+    // Privacidad pre-freeze: solo el propio usuario puede ver sus predicciones
+    if (!await esFrozen()) {
+      if (!auth.ok || auth.username !== username) {
+        sendJson(req, res, 403, { ok: false, error: 'Acceso denegado antes del freeze' });
+        return;
+      }
     }
     const user = await User.findOne({ username: username.toLowerCase() });
     if (!user) {
@@ -251,6 +291,10 @@ const server = http.createServer(async (req, res) => {
 
   // Endpoint: Guardar/actualizar predicciones de un usuario
   if (reqUrl.pathname === '/api/predictions' && req.method === 'PUT') {
+    if (await esFrozen()) {
+      sendJson(req, res, 403, { ok: false, error: 'Los pronósticos están bloqueados hasta la fecha de freeze' });
+      return;
+    }
     const auth = authenticate(req);
     if (!auth.ok) {
       sendJson(req, res, auth.status, { ok: false, error: auth.error });
@@ -290,6 +334,13 @@ const server = http.createServer(async (req, res) => {
       sendJson(req, res, 400, { ok: false, error: 'Parámetro username requerido' });
       return;
     }
+    // Privacidad pre-freeze: solo el propio usuario puede ver su plantilla
+    if (!await esFrozen()) {
+      if (!auth.ok || auth.username !== username) {
+        sendJson(req, res, 403, { ok: false, error: 'Acceso denegado antes del freeze' });
+        return;
+      }
+    }
     const result = await getSquad(username);
     sendJson(req, res, result.ok ? 200 : 404, result, 300);
     return;
@@ -297,15 +348,25 @@ const server = http.createServer(async (req, res) => {
 
   // Endpoint: Obtener plantillas de TODOS los usuarios (una sola query)
   if (reqUrl.pathname === '/api/squad/all' && req.method === 'GET') {
+    const auth = authenticate(req);
     try {
-      const users = await User.find({}, 'username squad');
+      const frozen = await esFrozen();
+      let query;
+      if (frozen || !auth.ok) {
+        // Tras freeze: todas. Sin auth: todas (fallback, aunque el frontend siempre envía token).
+        query = User.find({}, 'username squad');
+      } else {
+        // Pre-freeze con auth: solo el propio usuario
+        query = User.find({ username: auth.username }, 'username squad');
+      }
+      const users = await query;
       const squads = {};
       for (const user of users) {
         if (user.squad && user.squad.length > 0) {
           squads[user.username] = user.squad;
         }
       }
-      sendJson(req, res, 200, { ok: true, squads }, 300);
+      sendJson(req, res, 200, { ok: true, squads }, frozen ? 300 : 0);
     } catch (e) {
       sendJson(req, res, 500, { ok: false, error: 'Error al obtener plantillas' });
     }
@@ -314,6 +375,10 @@ const server = http.createServer(async (req, res) => {
 
   // Endpoint: Guardar/actualizar plantilla ideal de un usuario
   if (reqUrl.pathname === '/api/squad' && req.method === 'PUT') {
+    if (await esFrozen()) {
+      sendJson(req, res, 403, { ok: false, error: 'La plantilla está bloqueada hasta la fecha de freeze' });
+      return;
+    }
     const auth = authenticate(req);
     if (!auth.ok) {
       sendJson(req, res, auth.status, { ok: false, error: auth.error });
@@ -336,6 +401,22 @@ const server = http.createServer(async (req, res) => {
     }
     const result = await saveSquad(auth.username, body.squad);
     sendJson(req, res, result.ok ? 200 : 400, result);
+    return;
+  }
+
+  // Endpoint: Total de matchstats (ligero, para polling)
+  if (reqUrl.pathname === '/api/match-stats/updated' && req.method === 'GET') {
+    try {
+      const result = await MatchStats.findOne({}, 'eventId lastUpdated').sort({ lastUpdated: -1 });
+      const count = await MatchStats.countDocuments();
+      sendJson(req, res, 200, {
+        ok: true,
+        count,
+        lastUpdated: result?.lastUpdated || null
+      });
+    } catch (e) {
+      sendJson(req, res, 500, { ok: false, error: 'Error al obtener estado' });
+    }
     return;
   }
 
@@ -375,8 +456,16 @@ const server = http.createServer(async (req, res) => {
 
   // Endpoint: Obtener predicciones de todos los usuarios
   if (reqUrl.pathname === '/api/predictions/all' && req.method === 'GET') {
+    const auth = authenticate(req);
     try {
-      const users = await User.find({}, 'username predictions');
+      const frozen = await esFrozen();
+      let query;
+      if (frozen || !auth.ok) {
+        query = User.find({}, 'username predictions');
+      } else {
+        query = User.find({ username: auth.username }, 'username predictions');
+      }
+      const users = await query;
       const predictions = {};
       for (const user of users) {
         if (user.predictions && Object.keys(user.predictions).length > 0) {
