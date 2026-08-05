@@ -1,27 +1,52 @@
 import 'dotenv/config';
 import http from 'http';
 import https from 'https';
+import crypto from 'crypto';
+import zlib from 'zlib';
 import { connectDB, User, Invitation, MatchStats } from './db/index.js';
 import { leerFichero } from './github.js';
 import { register, login, getProfile, saveProfile, getTakenAvatars, getAllPlayers, getSquad, saveSquad, changePassword } from './api/auth.js';
 import { scrapMatchStats } from './scripts/matchStats.js';
+import { authenticate, rateLimiter, checkBodySize, setSecurityHeaders, validateUsername, authRateLimiter } from './api/middleware.js';
 
 const PORT = process.env.PORT || 3000;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://porra-spa.vercel.app';
 
 const nuevoUsuario = () => {
-  let codigo = Math.random().toString(36).slice(-4).toUpperCase();
+  let codigo = crypto.randomBytes(3).toString('hex').toUpperCase();
   return codigo;
 }
 
-function setCorsHeaders(res) {
-  res.setHeader('Access-Control-Allow-Origin', FRONTEND_URL);
+const loginLimiter = rateLimiter({ windowMs: 15 * 60 * 1000, max: 10 });
+const registerLimiter = rateLimiter({ windowMs: 15 * 60 * 1000, max: 5 });
+const globalLimiter = rateLimiter({ windowMs: 60 * 1000, max: 120 });
+const nuevoUsuarioLimiter = rateLimiter({ windowMs: 60 * 60 * 1000, max: 10 });
+const authenticatedLimiter = authRateLimiter({ windowMs: 60 * 1000, max: 30 });
+
+function setCorsHeaders(req, res) {
+  const origin = req.headers['origin'];
+  const allowedOrigins = [
+    'https://porra-spa.vercel.app',
+    'http://localhost:5173',
+    'http://localhost:3000',
+    'http://localhost:8080'
+  ];
+  if (allowedOrigins.includes(origin) || (origin && origin.startsWith('http://localhost'))) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  } else {
+    res.setHeader('Access-Control-Allow-Origin', FRONTEND_URL);
+  }
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 }
 
-function parseBody(req) {
+function parseBody(req, maxSizeBytes = 1024 * 1024) {
   return new Promise((resolve, reject) => {
+    const contentLength = parseInt(req.headers['content-length'], 10);
+    if (isNaN(contentLength) || contentLength > maxSizeBytes) {
+      resolve({ __error: { status: 413, error: 'Body demasiado grande' } });
+      return;
+    }
     let body = '';
     req.on('data', chunk => { body += chunk; });
     req.on('end', () => {
@@ -35,12 +60,40 @@ function parseBody(req) {
   });
 }
 
+function sendJson(req, res, statusCode, data, cacheSeconds) {
+  const json = JSON.stringify(data);
+  const baseHeaders = { 'Content-Type': 'application/json; charset=utf-8' };
+  if (cacheSeconds) {
+    baseHeaders['Cache-Control'] = `public, max-age=${cacheSeconds}, stale-while-revalidate=${cacheSeconds * 2}`;
+  }
+  const acceptEncoding = req?.headers?.['accept-encoding'] || '';
+  if (acceptEncoding.includes('gzip') && json.length > 1024) {
+    zlib.gzip(json, (err, compressed) => {
+      if (err) {
+        res.writeHead(statusCode, baseHeaders);
+        res.end(json);
+        return;
+      }
+      res.writeHead(statusCode, {
+        ...baseHeaders,
+        'Content-Encoding': 'gzip',
+        'Content-Length': compressed.length
+      });
+      res.end(compressed);
+    });
+  } else {
+    res.writeHead(statusCode, baseHeaders);
+    res.end(json);
+  }
+}
+
 await connectDB();
 
 const server = http.createServer(async (req, res) => {
   const reqUrl = new URL(req.url, `http://${req.headers.host}`);
 
-  setCorsHeaders(res);
+  setCorsHeaders(req, res);
+  setSecurityHeaders(res);
 
   if (req.method === 'OPTIONS') {
     res.writeHead(204);
@@ -48,69 +101,109 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  const globalRateResult = globalLimiter(req);
+  if (!globalRateResult.ok) {
+    sendJson(req, res, globalRateResult.status, { ok: false, error: globalRateResult.error });
+    return;
+  }
+
   if (reqUrl.pathname === '/api/auth/register' && req.method === 'POST') {
-    const body = await parseBody(req);
-    if (!body) {
-      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ error: 'Body inválido' }));
+    const rateLimitResult = registerLimiter(req);
+    if (!rateLimitResult.ok) {
+      sendJson(req, res, rateLimitResult.status, { ok: false, error: rateLimitResult.error });
       return;
     }
+    const body = await parseBody(req);
+    if (!body || body.__error) {
+      const status = body?.__error?.status || 400;
+      sendJson(req, res, status, { ok: false, error: body?.__error?.error || 'Body inválido' });
+      return;
+    }
+    const usernameValidation = validateUsername(body.username);
+    if (!usernameValidation.ok) {
+      sendJson(req, res, 400, { ok: false, error: usernameValidation.error });
+      return;
+    }
+    body.username = usernameValidation.username;
     const result = await register(body.username, body.password, body.invitationCode);
-    res.writeHead(result.ok ? 200 : 400, { 'Content-Type': 'application/json; charset=utf-8' });
-    res.end(JSON.stringify(result));
+    sendJson(req, res, result.ok ? 200 : 400, result);
     return;
   }
 
   if (reqUrl.pathname === '/api/auth/login' && req.method === 'POST') {
+    const rateLimitResult = loginLimiter(req);
+    if (!rateLimitResult.ok) {
+      sendJson(req, res, rateLimitResult.status, { ok: false, error: rateLimitResult.error });
+      return;
+    }
     const body = await parseBody(req);
-    if (!body) {
-      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ error: 'Body inválido' }));
+    if (!body || body.__error) {
+      const status = body?.__error?.status || 400;
+      sendJson(req, res, status, { ok: false, error: body?.__error?.error || 'Body inválido' });
       return;
     }
     const result = await login(body.username, body.password);
-    res.writeHead(result.ok ? 200 : 401, { 'Content-Type': 'application/json; charset=utf-8' });
-    res.end(JSON.stringify(result));
+    sendJson(req, res, result.ok ? 200 : 401, result);
     return;
   }
 
   if (reqUrl.pathname === '/api/auth/profile' && req.method === 'GET') {
-    const username = reqUrl.searchParams.get('username');
-    if (!username) {
-      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ ok: false, error: 'Parámetro username requerido' }));
+    const auth = authenticate(req);
+    if (!auth.ok) {
+      sendJson(req, res, auth.status, { ok: false, error: auth.error });
       return;
     }
-    const result = await getProfile(username);
-    res.writeHead(result.ok ? 200 : 404, { 'Content-Type': 'application/json; charset=utf-8' });
-    res.end(JSON.stringify(result));
+    const result = await getProfile(auth.username);
+    sendJson(req, res, result.ok ? 200 : 404, result);
     return;
   }
 
   if (reqUrl.pathname === '/api/auth/profile' && req.method === 'POST') {
-    const body = await parseBody(req);
-    if (!body || !body.username) {
-      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ ok: false, error: 'Body inválido, se requiere username' }));
+    const auth = authenticate(req);
+    if (!auth.ok) {
+      sendJson(req, res, auth.status, { ok: false, error: auth.error });
       return;
     }
-    const result = await saveProfile(body.username, { avatar: body.avatar });
-    res.writeHead(result.ok ? 200 : 400, { 'Content-Type': 'application/json; charset=utf-8' });
-    res.end(JSON.stringify(result));
+    const authRateResult = authenticatedLimiter(req);
+    if (!authRateResult.ok) {
+      sendJson(req, res, authRateResult.status, { ok: false, error: authRateResult.error });
+      return;
+    }
+    const body = await parseBody(req);
+    if (!body || body.__error) {
+      const status = body?.__error?.status || 400;
+      sendJson(req, res, status, { ok: false, error: body?.__error?.error || 'Body inválido' });
+      return;
+    }
+    const result = await saveProfile(auth.username, { avatar: body.avatar });
+    sendJson(req, res, result.ok ? 200 : 400, result);
     return;
   }
 
   // Endpoint: Cambiar contraseña
   if (reqUrl.pathname === '/api/auth/change-password' && req.method === 'POST') {
-    const body = await parseBody(req);
-    if (!body || !body.username || !body.currentPassword || !body.newPassword) {
-      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ ok: false, error: 'Body inválido, se requiere username, currentPassword y newPassword' }));
+    const auth = authenticate(req);
+    if (!auth.ok) {
+      sendJson(req, res, auth.status, { ok: false, error: auth.error });
       return;
     }
-    const result = await changePassword(body.username, body.currentPassword, body.newPassword);
-    res.writeHead(result.ok ? 200 : 400, { 'Content-Type': 'application/json; charset=utf-8' });
-    res.end(JSON.stringify(result));
+    const authRateResult = authenticatedLimiter(req);
+    if (!authRateResult.ok) {
+      sendJson(req, res, authRateResult.status, { ok: false, error: authRateResult.error });
+      return;
+    }
+    const body = await parseBody(req);
+    if (!body || body.__error) {
+      const status = body?.__error?.status || 400;
+      sendJson(req, res, status, { ok: false, error: body?.__error?.error || 'Body inválido, se requiere currentPassword y newPassword' });
+      return;
+    }
+    if (!body.currentPassword || !body.newPassword) {
+      sendJson(req, res, 400, { ok: false, error: 'Body inválido, se requiere currentPassword y newPassword' });
+      return;
+    }
+    const result = await changePassword(auth.username, body.currentPassword, body.newPassword);
+    sendJson(req, res, result.ok ? 200 : 400, result);
     return;
   }
 
@@ -118,11 +211,9 @@ const server = http.createServer(async (req, res) => {
   if (reqUrl.pathname === '/api/config' && req.method === 'GET') {
     try {
       const config = await leerFichero('config.json');
-      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ ok: true, config }));
+      sendJson(req, res, 200, { ok: true, config }, 3600);
     } catch (e) {
-      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ ok: false, error: 'No se pudo cargar la configuración' }));
+      sendJson(req, res, 500, { ok: false, error: 'No se pudo cargar la configuración' });
     }
     return;
   }
@@ -130,84 +221,121 @@ const server = http.createServer(async (req, res) => {
   // Endpoint: Avatares ya cogidos por otros usuarios
   if (reqUrl.pathname === '/api/avatars/taken' && req.method === 'GET') {
     const taken = await getTakenAvatars();
-    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-    res.end(JSON.stringify({ ok: true, taken }));
+    sendJson(req, res, 200, { ok: true, taken }, 300);
     return;
   }
 
   // Endpoint: Todos los jugadores registrados (para clasificación)
   if (reqUrl.pathname === '/api/players' && req.method === 'GET') {
     const players = await getAllPlayers();
-    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-    res.end(JSON.stringify({ ok: true, players }));
+    sendJson(req, res, 200, { ok: true, players }, 300);
     return;
   }
 
-  // Endpoint: Obtener predicciones de un usuario
+  // Endpoint: Obtener predicciones de un usuario (lectura pública, escritura requiere auth)
   if (reqUrl.pathname === '/api/predictions' && req.method === 'GET') {
-    const username = reqUrl.searchParams.get('username');
+    const auth = authenticate(req);
+    const username = reqUrl.searchParams.get('username') || (auth.ok ? auth.username : null);
     if (!username) {
-      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ ok: false, error: 'Parámetro username requerido' }));
+      sendJson(req, res, 400, { ok: false, error: 'Parámetro username requerido' });
       return;
     }
     const user = await User.findOne({ username: username.toLowerCase() });
     if (!user) {
-      res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ ok: false, error: 'Usuario no encontrado' }));
+      sendJson(req, res, 404, { ok: false, error: 'Usuario no encontrado' });
       return;
     }
-    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-    res.end(JSON.stringify({ ok: true, predictions: user.predictions || {} }));
+    sendJson(req, res, 200, { ok: true, predictions: user.predictions || {} });
     return;
   }
 
   // Endpoint: Guardar/actualizar predicciones de un usuario
   if (reqUrl.pathname === '/api/predictions' && req.method === 'PUT') {
-    const body = await parseBody(req);
-    if (!body || !body.username || !body.predictions) {
-      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ ok: false, error: 'Body inválido, se requiere username y predictions' }));
+    const auth = authenticate(req);
+    if (!auth.ok) {
+      sendJson(req, res, auth.status, { ok: false, error: auth.error });
       return;
     }
-    const user = await User.findOne({ username: body.username.toLowerCase() });
+    const authRateResult = authenticatedLimiter(req);
+    if (!authRateResult.ok) {
+      sendJson(req, res, authRateResult.status, { ok: false, error: authRateResult.error });
+      return;
+    }
+    const body = await parseBody(req);
+    if (!body || body.__error) {
+      const status = body?.__error?.status || 400;
+      sendJson(req, res, status, { ok: false, error: body?.__error?.error || 'Body inválido, se requiere predictions' });
+      return;
+    }
+    if (!body.predictions) {
+      sendJson(req, res, 400, { ok: false, error: 'Body inválido, se requiere predictions' });
+      return;
+    }
+    const user = await User.findOne({ username: auth.username });
     if (!user) {
-      res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ ok: false, error: 'Usuario no encontrado' }));
+      sendJson(req, res, 404, { ok: false, error: 'Usuario no encontrado' });
       return;
     }
     user.predictions = body.predictions;
     await user.save();
-    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-    res.end(JSON.stringify({ ok: true }));
+    sendJson(req, res, 200, { ok: true });
     return;
   }
 
-  // Endpoint: Obtener plantilla ideal de un usuario
+  // Endpoint: Obtener plantilla ideal de un usuario (lectura pública, escritura requiere auth)
   if (reqUrl.pathname === '/api/squad' && req.method === 'GET') {
-    const username = reqUrl.searchParams.get('username');
+    const auth = authenticate(req);
+    const username = reqUrl.searchParams.get('username') || (auth.ok ? auth.username : null);
     if (!username) {
-      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ ok: false, error: 'Parámetro username requerido' }));
+      sendJson(req, res, 400, { ok: false, error: 'Parámetro username requerido' });
       return;
     }
     const result = await getSquad(username);
-    res.writeHead(result.ok ? 200 : 404, { 'Content-Type': 'application/json; charset=utf-8' });
-    res.end(JSON.stringify(result));
+    sendJson(req, res, result.ok ? 200 : 404, result, 300);
+    return;
+  }
+
+  // Endpoint: Obtener plantillas de TODOS los usuarios (una sola query)
+  if (reqUrl.pathname === '/api/squad/all' && req.method === 'GET') {
+    try {
+      const users = await User.find({}, 'username squad');
+      const squads = {};
+      for (const user of users) {
+        if (user.squad && user.squad.length > 0) {
+          squads[user.username] = user.squad;
+        }
+      }
+      sendJson(req, res, 200, { ok: true, squads }, 300);
+    } catch (e) {
+      sendJson(req, res, 500, { ok: false, error: 'Error al obtener plantillas' });
+    }
     return;
   }
 
   // Endpoint: Guardar/actualizar plantilla ideal de un usuario
   if (reqUrl.pathname === '/api/squad' && req.method === 'PUT') {
-    const body = await parseBody(req);
-    if (!body || !body.username || !body.squad) {
-      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ ok: false, error: 'Body inválido, se requiere username y squad' }));
+    const auth = authenticate(req);
+    if (!auth.ok) {
+      sendJson(req, res, auth.status, { ok: false, error: auth.error });
       return;
     }
-    const result = await saveSquad(body.username, body.squad);
-    res.writeHead(result.ok ? 200 : 400, { 'Content-Type': 'application/json; charset=utf-8' });
-    res.end(JSON.stringify(result));
+    const authRateResult = authenticatedLimiter(req);
+    if (!authRateResult.ok) {
+      sendJson(req, res, authRateResult.status, { ok: false, error: authRateResult.error });
+      return;
+    }
+    const body = await parseBody(req);
+    if (!body || body.__error) {
+      const status = body?.__error?.status || 400;
+      sendJson(req, res, status, { ok: false, error: body?.__error?.error || 'Body inválido, se requiere squad' });
+      return;
+    }
+    if (!body.squad) {
+      sendJson(req, res, 400, { ok: false, error: 'Body inválido, se requiere squad' });
+      return;
+    }
+    const result = await saveSquad(auth.username, body.squad);
+    sendJson(req, res, result.ok ? 200 : 400, result);
     return;
   }
 
@@ -215,8 +343,7 @@ const server = http.createServer(async (req, res) => {
   if (reqUrl.pathname.startsWith('/api/match-stats/') && req.method === 'GET') {
     const eventId = reqUrl.pathname.split('/api/match-stats/')[1];
     if (!eventId || isNaN(eventId)) {
-      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ ok: false, error: 'ID de partido inválido' }));
+      sendJson(req, res, 400, { ok: false, error: 'ID de partido inválido' });
       return;
     }
     try {
@@ -226,13 +353,11 @@ const server = http.createServer(async (req, res) => {
         { eventId: Number(eventId), stats, lastUpdated: new Date() },
         { upsert: true, new: true }
       );
-      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify(stats));
+      sendJson(req, res, 200, stats);
     } catch (e) {
       const status = e.message === 'NOT_FOUND' ? 404 : 500;
       const error = e.message === 'NOT_FOUND' ? 'Partido no encontrado en Sofascore' : 'Error al obtener estadísticas del partido';
-      res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ ok: false, error }));
+      sendJson(req, res, status, { ok: false, error });
     }
     return;
   }
@@ -241,11 +366,9 @@ const server = http.createServer(async (req, res) => {
   if (reqUrl.pathname === '/api/match-stats' && req.method === 'GET') {
     try {
       const matchStats = await MatchStats.find({});
-      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ ok: true, matchStats }));
+      sendJson(req, res, 200, { ok: true, matchStats });
     } catch (e) {
-      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ ok: false, error: 'Error al obtener estadísticas' }));
+      sendJson(req, res, 500, { ok: false, error: 'Error al obtener estadísticas' });
     }
     return;
   }
@@ -260,17 +383,20 @@ const server = http.createServer(async (req, res) => {
           predictions[user.username] = user.predictions;
         }
       }
-      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ ok: true, predictions }));
+      sendJson(req, res, 200, { ok: true, predictions });
     } catch (e) {
-      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ ok: false, error: 'Error al obtener predicciones' }));
+      sendJson(req, res, 500, { ok: false, error: 'Error al obtener predicciones' });
     }
     return;
   }
 
   // Endpoint para nuevoUsuario
   if (reqUrl.pathname === '/nuevoUsuario') {
+    const rateLimitResult = nuevoUsuarioLimiter(req);
+    if (!rateLimitResult.ok) {
+      sendJson(req, res, rateLimitResult.status, { ok: false, error: rateLimitResult.error });
+      return;
+    }
     const claveUsuario = nuevoUsuario();
 
     await Invitation.create({
@@ -279,8 +405,7 @@ const server = http.createServer(async (req, res) => {
       createdAt: new Date()
     });
 
-    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-    res.end(JSON.stringify({ clave: claveUsuario }, null, 2));
+    sendJson(req, res, 200, { clave: claveUsuario });
     return;
   }
 
@@ -288,41 +413,29 @@ const server = http.createServer(async (req, res) => {
   if (reqUrl.pathname === '/usuario') {
     const clave = reqUrl.searchParams.get('clave');
     if (!clave) {
-      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({
+      sendJson(req, res, 400, {
         status: 'error',
         message: 'Debe proporcionar una clave de usuario.'
-      }, null, 2));
+      });
       return;
     }
 
-    const usuario = await User.findOne({ clave: clave });
+    const usuario = await User.findOne({ clave: clave }, '-passwordHash -__v');
     if (!usuario) {
-      res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({
+      sendJson(req, res, 404, {
         status: 'error',
         message: 'Usuario no encontrado.'
-      }, null, 2));
+      });
       return;
     }
 
-    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-    res.end(JSON.stringify(usuario, null, 2));
+    sendJson(req, res, 200, usuario);
     return;
   }
 
-  // Debug: listar usuarios e invitaciones
-  if (reqUrl.pathname === '/api/debug/users') {
-    const invitations = await Invitation.find({});
-    const users = await User.find({});
-    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-    res.end(JSON.stringify({ invitations, users }, null, 2));
-    return;
-  }
 
   // Respuesta por defecto
-  res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-  res.end(JSON.stringify({
+  sendJson(req, res, 200, {
     status: 'ok',
     message: '¡Servidor Node.js activo y funcionando!',
     endpoints: {
@@ -343,7 +456,7 @@ const server = http.createServer(async (req, res) => {
       matchStats: 'GET /api/match-stats/:eventId'
     },
     timestamp: new Date().toISOString()
-  }, null, 2));
+  });
 });
 
 server.listen(PORT, () => {

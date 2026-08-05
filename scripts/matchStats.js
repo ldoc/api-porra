@@ -114,7 +114,7 @@ function processIncidents(incidentsData) {
             }
         }
 
-        if (incident.incidentType === 'goal' && incident.incidentClass === 'regular') {
+        if (incident.incidentType === 'goal') {
             const gk = incident.footballPassingNetworkAction?.[0]?.goalkeeper;
             if (gk) {
                 const gkId = String(gk.id);
@@ -156,6 +156,9 @@ export async function scrapMatchStats(eventId) {
     await Promise.all(gkStatsPromises);
 
     const { penaltiesScored, goalsByGoalkeeper } = processIncidents(incidentsData);
+    const homeGoals = ev.homeScore?.current ?? 0;
+    const awayGoals = ev.awayScore?.current ?? 0;
+
     for (const player of allPlayers) {
         player.penaltiMarcado = penaltiesScored[player.id] || 0;
         if (player.posicion === 'G') {
@@ -163,9 +166,32 @@ export async function scrapMatchStats(eventId) {
         }
     }
 
+    // Asignar goles no atribuidos a porteros identificados
+    // Los goles que recibe el portero del equipo local son los del visitante, y viceversa
+    const homeGks = allPlayers.filter(p => p.posicion === 'G' && p.equipo === homeTeamId && p.minutos > 0);
+    const awayGks = allPlayers.filter(p => p.posicion === 'G' && p.equipo === awayTeamId && p.minutos > 0);
+
+    const homeGksAttributed = homeGks.reduce((sum, g) => sum + (g.golesRecibidos || 0), 0);
+    const awayGksAttributed = awayGks.reduce((sum, g) => sum + (g.golesRecibidos || 0), 0);
+
+    // Porteros locales reciben goles del visitante
+    const homeMissing = awayGoals - homeGksAttributed;
+    // Porteros visitantes reciben goles del local
+    const awayMissing = homeGoals - awayGksAttributed;
+
+    if (homeMissing > 0 && homeGks.length > 0) {
+        const mainGk = homeGks.sort((a, b) => b.minutos - a.minutos)[0];
+        mainGk.golesRecibidos = (mainGk.golesRecibidos || 0) + homeMissing;
+    }
+
+    if (awayMissing > 0 && awayGks.length > 0) {
+        const mainGk = awayGks.sort((a, b) => b.minutos - a.minutos)[0];
+        mainGk.golesRecibidos = (mainGk.golesRecibidos || 0) + awayMissing;
+    }
+
     return {
-        [homeId]: { goles: ev.homeScore?.current ?? 0 },
-        [awayId]: { goles: ev.awayScore?.current ?? 0 },
+        [homeId]: { goles: homeGoals },
+        [awayId]: { goles: awayGoals },
         jugadores: allPlayers
     };
 }
