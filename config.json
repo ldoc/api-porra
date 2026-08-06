@@ -1,6 +1,8 @@
 {
   "championsStartRoundsDate": "2026-07-01T21:00:00Z",
   "championsStartRoundsLabel": "Fase de Grupos",
+  "finalsFreezeDate": "2026-12-01T00:00:00Z",
+  "finalsFreezeLabel": "Fase de Dieciseisavos",
   "totalMatches": 144,
   "squadSize": 25,
   "squadFormation": {

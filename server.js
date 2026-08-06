@@ -47,6 +47,12 @@ async function esFrozen() {
   return new Date() >= new Date(config.championsStartRoundsDate);
 }
 
+async function esFinalsFrozen() {
+  const config = await getConfig();
+  if (!config || !config.finalsFreezeDate) return false;
+  return new Date() >= new Date(config.finalsFreezeDate);
+}
+
 function setCorsHeaders(req, res) {
   const origin = req.headers['origin'];
   const allowedOrigins = [
@@ -235,7 +241,14 @@ const server = http.createServer(async (req, res) => {
   if (reqUrl.pathname === '/api/config' && req.method === 'GET') {
     try {
       const config = await getConfig();
-      sendJson(req, res, 200, { ok: true, config }, 3600);
+      sendJson(req, res, 200, { 
+        ok: true, 
+        config: {
+          ...config,
+          finalsFreezeDate: config.finalsFreezeDate || null,
+          finalsFreezeLabel: config.finalsFreezeLabel || 'Fase de Dieciseisavos'
+        }
+      }, 3600);
     } catch (e) {
       sendJson(req, res, 500, { ok: false, error: 'No se pudo cargar la configuración' });
     }
@@ -321,6 +334,67 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     user.predictions = body.predictions;
+    await user.save();
+    sendJson(req, res, 200, { ok: true });
+    return;
+  }
+
+  // Endpoint: Obtener predicciones de fase final de un usuario
+  if (reqUrl.pathname === '/api/final-predictions' && req.method === 'GET') {
+    const auth = authenticate(req);
+    const username = reqUrl.searchParams.get('username') || (auth.ok ? auth.username : null);
+    if (!username) {
+      sendJson(req, res, 400, { ok: false, error: 'Parámetro username requerido' });
+      return;
+    }
+    // Privacidad pre-freeze: solo el propio usuario puede ver sus predicciones
+    if (!await esFinalsFrozen()) {
+      if (!auth.ok || auth.username !== username) {
+        sendJson(req, res, 403, { ok: false, error: 'Acceso denegado antes del freeze de fase final' });
+        return;
+      }
+    }
+    const user = await User.findOne({ username: username.toLowerCase() });
+    if (!user) {
+      sendJson(req, res, 404, { ok: false, error: 'Usuario no encontrado' });
+      return;
+    }
+    sendJson(req, res, 200, { ok: true, finalPredictions: user.finalPredictions || null });
+    return;
+  }
+
+  // Endpoint: Guardar/actualizar predicciones de fase final
+  if (reqUrl.pathname === '/api/final-predictions' && req.method === 'PUT') {
+    if (await esFinalsFrozen()) {
+      sendJson(req, res, 403, { ok: false, error: 'Los pronósticos de fase final están bloqueados' });
+      return;
+    }
+    const auth = authenticate(req);
+    if (!auth.ok) {
+      sendJson(req, res, auth.status, { ok: false, error: auth.error });
+      return;
+    }
+    const authRateResult = authenticatedLimiter(req);
+    if (!authRateResult.ok) {
+      sendJson(req, res, authRateResult.status, { ok: false, error: authRateResult.error });
+      return;
+    }
+    const body = await parseBody(req);
+    if (!body || body.__error) {
+      const status = body?.__error?.status || 400;
+      sendJson(req, res, status, { ok: false, error: body?.__error?.error || 'Body inválido, se requiere finalPredictions' });
+      return;
+    }
+    if (!body.finalPredictions) {
+      sendJson(req, res, 400, { ok: false, error: 'Body inválido, se requiere finalPredictions' });
+      return;
+    }
+    const user = await User.findOne({ username: auth.username });
+    if (!user) {
+      sendJson(req, res, 404, { ok: false, error: 'Usuario no encontrado' });
+      return;
+    }
+    user.finalPredictions = body.finalPredictions;
     await user.save();
     sendJson(req, res, 200, { ok: true });
     return;
@@ -481,15 +555,18 @@ const server = http.createServer(async (req, res) => {
       const frozen = await esFrozen();
       let query;
       if (frozen || !auth.ok) {
-        query = User.find({}, 'username predictions');
+        query = User.find({}, 'username predictions finalPredictions');
       } else {
-        query = User.find({ username: auth.username }, 'username predictions');
+        query = User.find({ username: auth.username }, 'username predictions finalPredictions');
       }
       const users = await query;
       const predictions = {};
       for (const user of users) {
         if (user.predictions && Object.keys(user.predictions).length > 0) {
-          predictions[user.username] = user.predictions;
+          predictions[user.username] = {
+            predictions: user.predictions,
+            finalPredictions: user.finalPredictions || null
+          };
         }
       }
       sendJson(req, res, 200, { ok: true, predictions });
@@ -560,6 +637,8 @@ const server = http.createServer(async (req, res) => {
       players: 'GET /api/players',
       getPredictions: 'GET /api/predictions?username=xxxx',
       savePredictions: 'PUT /api/predictions',
+      getFinalPredictions: 'GET /api/final-predictions?username=xxxx',
+      saveFinalPredictions: 'PUT /api/final-predictions',
       getSquad: 'GET /api/squad?username=xxxx',
       saveSquad: 'PUT /api/squad',
       matchStats: 'GET /api/match-stats/:eventId'
