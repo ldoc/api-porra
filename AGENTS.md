@@ -429,7 +429,7 @@ Cada participante deberá pronosticar el resultado de cada uno de los 144 partid
 | Acierto de goles marcados por ambos equipos | 1 |
 | **Puntuación máxima por partido** | **15** |
 
-### Puntuación por Pronóstico de Clasificación
+### /
 
 Adicionalmente a la puntuación de los partidos, al finalizar la fase de liga se obtendrán puntos por acertar la posición final de cada equipo en la liga.
 

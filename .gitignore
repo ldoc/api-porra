@@ -1,3 +1,6 @@
 node_modules/
 data/
-.envdata/users/
+.env
+data/users/
+opencode.json
+.opencode/

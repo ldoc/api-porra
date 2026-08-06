@@ -37,6 +37,17 @@ const userSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.Mixed,
     default: null
   },
+  finalPredictions: {
+    type: {
+      champion: Number,
+      runnerUp: Number,
+      semiFinalists: [Number],
+      quarterFinalists: [Number],
+      roundOf16: [Number],
+      roundOf32: [Number]
+    },
+    default: null
+  },
   createdAt: {
     type: Date,
     default: Date.now
