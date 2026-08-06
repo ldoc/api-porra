@@ -454,6 +454,26 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // Endpoint: Eliminar un matchstat por eventId
+  if (reqUrl.pathname.startsWith('/api/match-stats/') && req.method === 'DELETE') {
+    const eventId = parseInt(reqUrl.pathname.split('/api/match-stats/')[1]);
+    if (isNaN(eventId)) {
+      sendJson(req, res, 400, { ok: false, error: 'eventId inválido' });
+      return;
+    }
+    try {
+      const result = await MatchStats.deleteOne({ eventId });
+      if (result.deletedCount === 0) {
+        sendJson(req, res, 404, { ok: false, error: 'MatchStat no encontrado' });
+      } else {
+        sendJson(req, res, 200, { ok: true, deleted: eventId });
+      }
+    } catch (e) {
+      sendJson(req, res, 500, { ok: false, error: 'Error al eliminar estadísticas' });
+    }
+    return;
+  }
+
   // Endpoint: Obtener predicciones de todos los usuarios
   if (reqUrl.pathname === '/api/predictions/all' && req.method === 'GET') {
     const auth = authenticate(req);
