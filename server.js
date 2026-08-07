@@ -53,6 +53,135 @@ async function esFinalsFrozen() {
   return new Date() >= new Date(config.finalsFreezeDate);
 }
 
+/**
+ * Calcula los IDs de los 8 primeros equipos de la clasificación real
+ * Replica la lógica de desempate UCL del frontend (8 criterios)
+ * @returns {Promise<number[]>} Array de 8 team IDs
+ */
+async function getTop8TeamIds() {
+  try {
+    const allMatchStats = await MatchStats.find({}, 'stats').lean();
+    if (!allMatchStats || allMatchStats.length === 0) return [];
+
+    // Recopilar todos los team IDs y calcular estadísticas básicas
+    const teamStats = {};
+
+    for (const ms of allMatchStats) {
+      const stats = ms.stats;
+      if (!stats) continue;
+
+      const teamIds = Object.keys(stats).filter(k => k !== 'jugadores').map(Number);
+      if (teamIds.length !== 2) continue;
+
+      const [homeId, awayId] = teamIds;
+      const homeGoals = stats[homeId]?.goles ?? 0;
+      const awayGoals = stats[awayId]?.goles ?? 0;
+
+      // Inicializar equipos si no existen
+      for (const tid of teamIds) {
+        if (!teamStats[tid]) {
+          teamStats[tid] = {
+            teamId: tid,
+            points: 0,
+            gf: 0,
+            gc: 0,
+            gd: 0,
+            wins: 0,
+            draws: 0,
+            losses: 0,
+            awayGoals: 0,
+            awayWins: 0,
+            matches: [],
+            rivals: new Set()
+          };
+        }
+      }
+
+      const home = teamStats[homeId];
+      const away = teamStats[awayId];
+
+      // Registrar rivalidad
+      home.rivals.add(awayId);
+      away.rivals.add(homeId);
+
+      // Registrar partido para stats de rivales
+      home.matches.push({ goalsFor: homeGoals, goalsAgainst: awayGoals, isHome: true, rivalId: awayId });
+      away.matches.push({ goalsFor: awayGoals, goalsAgainst: homeGoals, isHome: false, rivalId: homeId });
+
+      // Goles
+      home.gf += homeGoals;
+      home.gc += awayGoals;
+      away.gf += awayGoals;
+      away.gc += homeGoals;
+
+      // Diferencia de goles
+      home.gd = home.gf - home.gc;
+      away.gd = away.gf - away.gc;
+
+      // Resultado
+      if (homeGoals > awayGoals) {
+        home.wins++;
+        home.points += 3;
+        away.losses++;
+      } else if (homeGoals < awayGoals) {
+        away.wins++;
+        away.points += 3;
+        home.losses++;
+      } else {
+        home.draws++;
+        home.points++;
+        away.draws++;
+        away.points++;
+      }
+
+      // Goles como visitante
+      away.awayGoals += awayGoals;
+      if (awayGoals > homeGoals) away.awayWins++;
+    }
+
+    const teams = Object.values(teamStats);
+
+    // Calcular stats de rivales (criterios 6-8)
+    for (const team of teams) {
+      let rivalPointsSum = 0;
+      let rivalGDSum = 0;
+      let rivalGFSum = 0;
+
+      for (const rivalId of team.rivals) {
+        const rival = teamStats[rivalId];
+        if (rival) {
+          rivalPointsSum += rival.points;
+          rivalGDSum += rival.gd;
+          rivalGFSum += rival.gf;
+        }
+      }
+
+      team.rivalPointsSum = rivalPointsSum;
+      team.rivalGDSum = rivalGDSum;
+      team.rivalGFSum = rivalGFSum;
+    }
+
+    // Ordenar con criterios de desempate UCL
+    teams.sort((a, b) => {
+      if (b.points !== a.points) return b.points - a.points;
+      if (b.gd !== a.gd) return b.gd - a.gd;
+      if (b.gf !== a.gf) return b.gf - a.gf;
+      if (b.awayGoals !== a.awayGoals) return b.awayGoals - a.awayGoals;
+      if (b.wins !== a.wins) return b.wins - a.wins;
+      if (b.awayWins !== a.awayWins) return b.awayWins - a.awayWins;
+      if (b.rivalPointsSum !== a.rivalPointsSum) return b.rivalPointsSum - a.rivalPointsSum;
+      if (b.rivalGDSum !== a.rivalGDSum) return b.rivalGDSum - a.rivalGDSum;
+      if (b.rivalGFSum !== a.rivalGFSum) return b.rivalGFSum - a.rivalGFSum;
+      return 0;
+    });
+
+    return teams.slice(0, 8).map(t => t.teamId);
+  } catch (err) {
+    console.error('Error calculating top 8 teams:', err);
+    return [];
+  }
+}
+
 function setCorsHeaders(req, res) {
   const origin = req.headers['origin'];
   const allowedOrigins = [
@@ -389,6 +518,21 @@ const server = http.createServer(async (req, res) => {
       sendJson(req, res, 400, { ok: false, error: 'Body inválido, se requiere finalPredictions' });
       return;
     }
+
+    // Validación: los 8 primeros clasificados no pueden ir a deciseisavos
+    const fp = body.finalPredictions;
+    if (fp.roundOf32 && Array.isArray(fp.roundOf32) && fp.roundOf32.length > 0) {
+      const top8Ids = await getTop8TeamIds();
+      if (top8Ids.length > 0) {
+        const top8Set = new Set(top8Ids);
+        const invalidTeams = fp.roundOf32.filter(id => top8Set.has(id));
+        if (invalidTeams.length > 0) {
+          sendJson(req, res, 400, { ok: false, error: 'Los 8 primeros clasificados pasan directamente a octavos. No pueden asignarse a deciseisavos.' });
+          return;
+        }
+      }
+    }
+
     const user = await User.findOne({ username: auth.username });
     if (!user) {
       sendJson(req, res, 404, { ok: false, error: 'Usuario no encontrado' });
