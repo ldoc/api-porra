@@ -82,9 +82,16 @@ api-porra/
 
 | Método | Ruta             | Descripción                                    |
 |--------|------------------|------------------------------------------------|
-| GET    | `/nuevoUsuario`  | Crear código de invitación (guarda `data/users/{clave}.json`) |
 | GET    | `/usuario?clave=X` | Obtener usuario por su clave                |
 | GET    | `/`              | Info del servidor y lista de endpoints         |
+
+### Administración (requiere auth admin)
+
+| Método | Ruta                          | Descripción                                    |
+|--------|-------------------------------|------------------------------------------------|
+| GET    | `/api/admin/invitations`      | Listar todos los códigos de invitación         |
+| POST   | `/api/admin/invitations`      | Crear nuevo código de invitación               |
+| DELETE | `/api/admin/invitations/:code`| Eliminar código no usado                       |
 
 ### Modelo de Datos de Usuario (auth)
 
