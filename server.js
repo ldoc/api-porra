@@ -521,6 +521,28 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // Endpoint Admin: Crear código de invitación
+  if (reqUrl.pathname === '/api/admin/invitations' && req.method === 'POST') {
+    const admin = await verifyAdmin(req);
+    if (!admin) {
+      sendJson(req, res, 403, { ok: false, error: 'Acceso denegado. Se requieren permisos de administrador.' });
+      return;
+    }
+    try {
+      const code = crypto.randomBytes(3).toString('hex').toUpperCase();
+      const invitation = await Invitation.create({
+        code,
+        usedBy: null,
+        createdAt: new Date()
+      });
+      sendJson(req, res, 201, { ok: true, invitation });
+    } catch (error) {
+      console.error('Error creando invitación:', error);
+      sendJson(req, res, 500, { ok: false, error: 'Error interno del servidor' });
+    }
+    return;
+  }
+
   // Endpoint: Avatares ya cogidos por otros usuarios
   if (reqUrl.pathname === '/api/avatars/taken' && req.method === 'GET') {
     const taken = await getTakenAvatars();
