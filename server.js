@@ -14,15 +14,9 @@ const PORT = process.env.PORT || 3000;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://porra-spa.vercel.app';
 const JWT_SECRET = process.env.JWT_SECRET;
 
-const nuevoUsuario = () => {
-  let codigo = crypto.randomBytes(3).toString('hex').toUpperCase();
-  return codigo;
-}
-
 const loginLimiter = rateLimiter({ windowMs: 15 * 60 * 1000, max: 10 });
 const registerLimiter = rateLimiter({ windowMs: 15 * 60 * 1000, max: 5 });
 const globalLimiter = rateLimiter({ windowMs: 60 * 1000, max: 120 });
-const nuevoUsuarioLimiter = rateLimiter({ windowMs: 60 * 60 * 1000, max: 10 });
 const authenticatedLimiter = authRateLimiter({ windowMs: 60 * 1000, max: 30 });
 
 /**
@@ -876,25 +870,6 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // Endpoint para nuevoUsuario
-  if (reqUrl.pathname === '/nuevoUsuario') {
-    const rateLimitResult = nuevoUsuarioLimiter(req);
-    if (!rateLimitResult.ok) {
-      sendJson(req, res, rateLimitResult.status, { ok: false, error: rateLimitResult.error });
-      return;
-    }
-    const claveUsuario = nuevoUsuario();
-
-    await Invitation.create({
-      code: claveUsuario,
-      usedBy: null,
-      createdAt: new Date()
-    });
-
-    sendJson(req, res, 200, { clave: claveUsuario });
-    return;
-  }
-
   // Endpoint para obtener un usuario por su clave
   if (reqUrl.pathname === '/usuario') {
     const clave = reqUrl.searchParams.get('clave');
@@ -925,7 +900,6 @@ const server = http.createServer(async (req, res) => {
     status: 'ok',
     message: '¡Servidor Node.js activo y funcionando!',
     endpoints: {
-      nuevoUsuario: '/nuevoUsuario',
       usuario: '/usuario?clave=xxxx',
       register: 'POST /api/auth/register',
       login: 'POST /api/auth/login',
