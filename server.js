@@ -213,7 +213,7 @@ function setCorsHeaders(req, res) {
   } else {
     res.setHeader('Access-Control-Allow-Origin', FRONTEND_URL);
   }
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Client-Phase');
 }
 
