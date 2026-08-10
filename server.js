@@ -543,6 +543,37 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // Endpoint Admin: Eliminar código de invitación
+  if (reqUrl.pathname.startsWith('/api/admin/invitations/') && req.method === 'DELETE') {
+    const admin = await verifyAdmin(req);
+    if (!admin) {
+      sendJson(req, res, 403, { ok: false, error: 'Acceso denegado. Se requieren permisos de administrador.' });
+      return;
+    }
+    const code = reqUrl.pathname.split('/api/admin/invitations/')[1];
+    if (!code || code.length !== 6) {
+      sendJson(req, res, 400, { ok: false, error: 'Código inválido' });
+      return;
+    }
+    try {
+      const invitation = await Invitation.findOne({ code: code.toUpperCase() });
+      if (!invitation) {
+        sendJson(req, res, 404, { ok: false, error: 'Código no encontrado' });
+        return;
+      }
+      if (invitation.usedBy !== null) {
+        sendJson(req, res, 400, { ok: false, error: 'No se puede eliminar un código ya utilizado' });
+        return;
+      }
+      await Invitation.deleteOne({ code: code.toUpperCase() });
+      sendJson(req, res, 200, { ok: true, deleted: code.toUpperCase() });
+    } catch (error) {
+      console.error('Error eliminando invitación:', error);
+      sendJson(req, res, 500, { ok: false, error: 'Error interno del servidor' });
+    }
+    return;
+  }
+
   // Endpoint: Avatares ya cogidos por otros usuarios
   if (reqUrl.pathname === '/api/avatars/taken' && req.method === 'GET') {
     const taken = await getTakenAvatars();
