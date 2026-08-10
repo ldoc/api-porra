@@ -3,14 +3,16 @@ import http from 'http';
 import https from 'https';
 import crypto from 'crypto';
 import zlib from 'zlib';
+import jwt from 'jsonwebtoken';
 import { connectDB, User, Invitation, MatchStats } from './db/index.js';
-import { leerFichero } from './github.js';
+import GameConfig from './db/models/GameConfig.js';
 import { register, login, getProfile, saveProfile, getTakenAvatars, getAllPlayers, getSquad, saveSquad, changePassword } from './api/auth.js';
 import { scrapMatchStats } from './scripts/matchStats.js';
 import { authenticate, rateLimiter, checkBodySize, setSecurityHeaders, validateUsername, authRateLimiter } from './api/middleware.js';
 
 const PORT = process.env.PORT || 3000;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://porra-spa.vercel.app';
+const JWT_SECRET = process.env.JWT_SECRET;
 
 const nuevoUsuario = () => {
   let codigo = crypto.randomBytes(3).toString('hex').toUpperCase();
@@ -22,36 +24,6 @@ const registerLimiter = rateLimiter({ windowMs: 15 * 60 * 1000, max: 5 });
 const globalLimiter = rateLimiter({ windowMs: 60 * 1000, max: 120 });
 const nuevoUsuarioLimiter = rateLimiter({ windowMs: 60 * 60 * 1000, max: 10 });
 const authenticatedLimiter = authRateLimiter({ windowMs: 60 * 1000, max: 30 });
-
-// Cache de config con TTL de 60s
-let _configCache = null;
-let _configCacheTime = 0;
-const CONFIG_CACHE_TTL = 60_000;
-
-async function getConfig() {
-  if (_configCache && Date.now() - _configCacheTime < CONFIG_CACHE_TTL) {
-    return _configCache;
-  }
-  try {
-    _configCache = await leerFichero('config.json');
-    _configCacheTime = Date.now();
-  } catch {
-    _configCache = null;
-  }
-  return _configCache;
-}
-
-async function esFrozen() {
-  const config = await getConfig();
-  if (!config || !config.championsStartRoundsDate) return false;
-  return new Date() >= new Date(config.championsStartRoundsDate);
-}
-
-async function esFinalsFrozen() {
-  const config = await getConfig();
-  if (!config || !config.finalsFreezeDate) return false;
-  return new Date() >= new Date(config.finalsFreezeDate);
-}
 
 /**
  * Calcula los IDs de los 8 primeros equipos de la clasificación real
@@ -182,6 +154,58 @@ async function getTop8TeamIds() {
   }
 }
 
+async function getFaseJuego() {
+  try {
+    const config = await GameConfig.findById('gameConfig');
+    return config?.faseJuego || 'FASE_PRETEMPORADA';
+  } catch (error) {
+    console.error('Error obteniendo fase del juego:', error);
+    return 'FASE_PRETEMPORADA';
+  }
+}
+
+async function checkPhaseConsistency(req, res) {
+  const clientPhase = req.headers['x-client-phase'];
+  if (!clientPhase) {
+    return { match: true };
+  }
+  const currentPhase = await getFaseJuego();
+  if (clientPhase !== currentPhase) {
+    sendJson(req, res, 409, {
+      ok: false,
+      error: 'PHASE_CHANGED',
+      currentPhase,
+      previousPhase: clientPhase
+    });
+    return null;
+  }
+  return { match: true };
+}
+
+async function verifyAdmin(req) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return null;
+  }
+
+  const token = authHeader.substring(7);
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const user = await User.findOne({ username: decoded.username });
+
+    if (!user || !user.isAdmin) {
+      return null;
+    }
+
+    return user;
+  } catch (error) {
+    return null;
+  }
+}
+
+const FASES_VALIDAS = ['FASE_PRETEMPORADA', 'FASE_LIGA', 'FASE_PRE16'];
+
 function setCorsHeaders(req, res) {
   const origin = req.headers['origin'];
   const allowedOrigins = [
@@ -196,7 +220,7 @@ function setCorsHeaders(req, res) {
     res.setHeader('Access-Control-Allow-Origin', FRONTEND_URL);
   }
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Client-Phase');
 }
 
 function parseBody(req, maxSizeBytes = 1024 * 1024) {
@@ -366,20 +390,122 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // Endpoint: Configuración del torneo (se mantiene en GitHub)
+  // Endpoint: Configuración del torneo (MongoDB)
   if (reqUrl.pathname === '/api/config' && req.method === 'GET') {
     try {
-      const config = await getConfig();
-      sendJson(req, res, 200, { 
-        ok: true, 
+      const config = await GameConfig.findById('gameConfig');
+      
+      if (!config) {
+        sendJson(req, res, 200, {
+          ok: true,
+          config: {
+            faseJuego: 'FASE_PRETEMPORADA',
+            totalMatches: 144,
+            squadSize: 25,
+            squadFormation: { G: 3, D: 8, M: 8, F: 6 }
+          }
+        });
+        return;
+      }
+      
+      sendJson(req, res, 200, {
+        ok: true,
         config: {
-          ...config,
-          finalsFreezeDate: config.finalsFreezeDate || null,
-          finalsFreezeLabel: config.finalsFreezeLabel || 'Fase de Dieciseisavos'
+          faseJuego: config.faseJuego,
+          totalMatches: config.tournament.totalMatches,
+          squadSize: config.tournament.squadSize,
+          squadFormation: config.tournament.squadFormation
         }
-      }, 3600);
+      });
     } catch (e) {
-      sendJson(req, res, 500, { ok: false, error: 'No se pudo cargar la configuración' });
+      console.error('Error obteniendo config:', e);
+      sendJson(req, res, 500, { ok: false, error: 'Error interno' });
+    }
+    return;
+  }
+
+  // Endpoint Admin: Cambiar fase del juego
+  if (reqUrl.pathname === '/api/admin/fase-juego' && req.method === 'PUT') {
+    const admin = await verifyAdmin(req);
+    if (!admin) {
+      sendJson(req, res, 403, { ok: false, error: 'Acceso denegado. Se requieren permisos de administrador.' });
+      return;
+    }
+    const body = await parseBody(req);
+    if (!body || body.__error) {
+      const status = body?.__error?.status || 400;
+      sendJson(req, res, status, { ok: false, error: body?.__error?.error || 'Body inválido' });
+      return;
+    }
+    const { faseJuego } = body;
+    if (!FASES_VALIDAS.includes(faseJuego)) {
+      sendJson(req, res, 400, { ok: false, error: `Fase inválida. Valores permitidos: ${FASES_VALIDAS.join(', ')}` });
+      return;
+    }
+    try {
+      const config = await GameConfig.findByIdAndUpdate(
+        'gameConfig',
+        { $set: { faseJuego, updatedBy: admin.username, updatedAt: new Date() } },
+        { new: true, upsert: true }
+      );
+      sendJson(req, res, 200, {
+        ok: true,
+        faseJuego: config.faseJuego,
+        updatedBy: config.updatedBy,
+        updatedAt: config.updatedAt
+      });
+    } catch (error) {
+      console.error('Error cambiando fase:', error);
+      sendJson(req, res, 500, { ok: false, error: 'Error interno del servidor' });
+    }
+    return;
+  }
+
+  // Endpoint Admin: Actualizar configuración completa
+  if (reqUrl.pathname === '/api/admin/config' && req.method === 'PUT') {
+    const admin = await verifyAdmin(req);
+    if (!admin) {
+      sendJson(req, res, 403, { ok: false, error: 'Acceso denegado. Se requieren permisos de administrador.' });
+      return;
+    }
+    const body = await parseBody(req);
+    if (!body || body.__error) {
+      const status = body?.__error?.status || 400;
+      sendJson(req, res, status, { ok: false, error: body?.__error?.error || 'Body inválido' });
+      return;
+    }
+    const { faseJuego, tournament } = body;
+    const updateData = { updatedBy: admin.username, updatedAt: new Date() };
+    if (faseJuego) {
+      if (!FASES_VALIDAS.includes(faseJuego)) {
+        sendJson(req, res, 400, { ok: false, error: `Fase inválida. Valores permitidos: ${FASES_VALIDAS.join(', ')}` });
+        return;
+      }
+      updateData.faseJuego = faseJuego;
+    }
+    if (tournament) {
+      updateData.tournament = tournament;
+    }
+    try {
+      const config = await GameConfig.findByIdAndUpdate(
+        'gameConfig',
+        { $set: updateData },
+        { new: true, upsert: true }
+      );
+      sendJson(req, res, 200, {
+        ok: true,
+        config: {
+          faseJuego: config.faseJuego,
+          totalMatches: config.tournament.totalMatches,
+          squadSize: config.tournament.squadSize,
+          squadFormation: config.tournament.squadFormation
+        },
+        updatedBy: config.updatedBy,
+        updatedAt: config.updatedAt
+      });
+    } catch (error) {
+      console.error('Error actualizando config:', error);
+      sendJson(req, res, 500, { ok: false, error: 'Error interno del servidor' });
     }
     return;
   }
@@ -393,10 +519,13 @@ const server = http.createServer(async (req, res) => {
 
   // Endpoint: Todos los jugadores registrados (para clasificación)
   if (reqUrl.pathname === '/api/players' && req.method === 'GET') {
+    const phaseCheck = await checkPhaseConsistency(req, res);
+    if (!phaseCheck) return;
     const players = await getAllPlayers();
-    const frozen = await esFrozen();
-    if (!frozen) {
-      // Pre-freeze: solo nombre y avatar (sin puntos ni aciertos)
+    const fase = await getFaseJuego();
+    const showPoints = fase !== 'FASE_PRETEMPORADA';
+    if (!showPoints) {
+      // Pre-temporada: solo nombre y avatar (sin puntos ni aciertos)
       sendJson(req, res, 200, {
         ok: true,
         players: players.map(p => ({ name: p.name, avatar: p.avatar }))
@@ -409,18 +538,20 @@ const server = http.createServer(async (req, res) => {
 
   // Endpoint: Obtener predicciones de un usuario (lectura pública, escritura requiere auth)
   if (reqUrl.pathname === '/api/predictions' && req.method === 'GET') {
+    const phaseCheck = await checkPhaseConsistency(req, res);
+    if (!phaseCheck) return;
     const auth = authenticate(req);
     const username = reqUrl.searchParams.get('username') || (auth.ok ? auth.username : null);
     if (!username) {
       sendJson(req, res, 400, { ok: false, error: 'Parámetro username requerido' });
       return;
     }
-    // Privacidad pre-freeze: solo el propio usuario puede ver sus predicciones
-    if (!await esFrozen()) {
-      if (!auth.ok || auth.username !== username) {
-        sendJson(req, res, 403, { ok: false, error: 'Acceso denegado antes del freeze' });
-        return;
-      }
+    // Privacidad pre-temporada: solo el propio usuario puede ver sus predicciones
+    const fase = await getFaseJuego();
+    const isPublic = fase !== 'FASE_PRETEMPORADA';
+    if (!isPublic && (!auth.ok || auth.username !== username)) {
+      sendJson(req, res, 403, { ok: false, error: 'Solo puedes ver tus propios pronosticos' });
+      return;
     }
     const user = await User.findOne({ username: username.toLowerCase() });
     if (!user) {
@@ -433,8 +564,11 @@ const server = http.createServer(async (req, res) => {
 
   // Endpoint: Guardar/actualizar predicciones de un usuario
   if (reqUrl.pathname === '/api/predictions' && req.method === 'PUT') {
-    if (await esFrozen()) {
-      sendJson(req, res, 403, { ok: false, error: 'Los pronósticos están bloqueados hasta la fecha de freeze' });
+    const phaseCheck = await checkPhaseConsistency(req, res);
+    if (!phaseCheck) return;
+    const fase = await getFaseJuego();
+    if (fase !== 'FASE_PRETEMPORADA') {
+      sendJson(req, res, 403, { ok: false, error: 'Los pronosticos estan bloqueados' });
       return;
     }
     const auth = authenticate(req);
@@ -470,18 +604,20 @@ const server = http.createServer(async (req, res) => {
 
   // Endpoint: Obtener predicciones de fase final de un usuario
   if (reqUrl.pathname === '/api/final-predictions' && req.method === 'GET') {
+    const phaseCheck = await checkPhaseConsistency(req, res);
+    if (!phaseCheck) return;
     const auth = authenticate(req);
     const username = reqUrl.searchParams.get('username') || (auth.ok ? auth.username : null);
     if (!username) {
       sendJson(req, res, 400, { ok: false, error: 'Parámetro username requerido' });
       return;
     }
-    // Privacidad pre-freeze: solo el propio usuario puede ver sus predicciones
-    if (!await esFinalsFrozen()) {
-      if (!auth.ok || auth.username !== username) {
-        sendJson(req, res, 403, { ok: false, error: 'Acceso denegado antes del freeze de fase final' });
-        return;
-      }
+    // Privacidad pre-temporada: solo el propio usuario puede ver sus predicciones
+    const fase = await getFaseJuego();
+    const isPublic = fase !== 'FASE_PRETEMPORADA';
+    if (!isPublic && (!auth.ok || auth.username !== username)) {
+      sendJson(req, res, 403, { ok: false, error: 'Solo puedes ver tus propios pronosticos finales' });
+      return;
     }
     const user = await User.findOne({ username: username.toLowerCase() });
     if (!user) {
@@ -494,8 +630,11 @@ const server = http.createServer(async (req, res) => {
 
   // Endpoint: Guardar/actualizar predicciones de fase final
   if (reqUrl.pathname === '/api/final-predictions' && req.method === 'PUT') {
-    if (await esFinalsFrozen()) {
-      sendJson(req, res, 403, { ok: false, error: 'Los pronósticos de fase final están bloqueados' });
+    const phaseCheck = await checkPhaseConsistency(req, res);
+    if (!phaseCheck) return;
+    const fase = await getFaseJuego();
+    if (fase !== 'FASE_PRETEMPORADA') {
+      sendJson(req, res, 403, { ok: false, error: 'Los pronosticos finales estan bloqueados' });
       return;
     }
     const auth = authenticate(req);
@@ -546,18 +685,20 @@ const server = http.createServer(async (req, res) => {
 
   // Endpoint: Obtener plantilla ideal de un usuario (lectura pública, escritura requiere auth)
   if (reqUrl.pathname === '/api/squad' && req.method === 'GET') {
+    const phaseCheck = await checkPhaseConsistency(req, res);
+    if (!phaseCheck) return;
     const auth = authenticate(req);
     const username = reqUrl.searchParams.get('username') || (auth.ok ? auth.username : null);
     if (!username) {
       sendJson(req, res, 400, { ok: false, error: 'Parámetro username requerido' });
       return;
     }
-    // Privacidad pre-freeze: solo el propio usuario puede ver su plantilla
-    if (!await esFrozen()) {
-      if (!auth.ok || auth.username !== username) {
-        sendJson(req, res, 403, { ok: false, error: 'Acceso denegado antes del freeze' });
-        return;
-      }
+    // Privacidad pre-temporada: solo el propio usuario puede ver su plantilla
+    const fase = await getFaseJuego();
+    const isPublic = fase !== 'FASE_PRETEMPORADA';
+    if (!isPublic && (!auth.ok || auth.username !== username)) {
+      sendJson(req, res, 403, { ok: false, error: 'Solo puedes ver tu propia plantilla' });
+      return;
     }
     const result = await getSquad(username);
     sendJson(req, res, result.ok ? 200 : 404, result, 300);
@@ -566,15 +707,18 @@ const server = http.createServer(async (req, res) => {
 
   // Endpoint: Obtener plantillas de TODOS los usuarios (una sola query)
   if (reqUrl.pathname === '/api/squad/all' && req.method === 'GET') {
+    const phaseCheck = await checkPhaseConsistency(req, res);
+    if (!phaseCheck) return;
     const auth = authenticate(req);
     try {
-      const frozen = await esFrozen();
+      const fase = await getFaseJuego();
+      const isPublic = fase !== 'FASE_PRETEMPORADA';
       let query;
-      if (frozen || !auth.ok) {
-        // Tras freeze: todas. Sin auth: todas (fallback, aunque el frontend siempre envía token).
+      if (isPublic || !auth.ok) {
+        // Fase activa: todas. Sin auth: todas (fallback, aunque el frontend siempre envía token).
         query = User.find({}, 'username squad');
       } else {
-        // Pre-freeze con auth: solo el propio usuario
+        // Pre-temporada con auth: solo el propio usuario
         query = User.find({ username: auth.username }, 'username squad');
       }
       const users = await query;
@@ -584,7 +728,7 @@ const server = http.createServer(async (req, res) => {
           squads[user.username] = user.squad;
         }
       }
-      sendJson(req, res, 200, { ok: true, squads }, frozen ? 300 : 0);
+      sendJson(req, res, 200, { ok: true, squads }, isPublic ? 300 : 0);
     } catch (e) {
       sendJson(req, res, 500, { ok: false, error: 'Error al obtener plantillas' });
     }
@@ -593,8 +737,11 @@ const server = http.createServer(async (req, res) => {
 
   // Endpoint: Guardar/actualizar plantilla ideal de un usuario
   if (reqUrl.pathname === '/api/squad' && req.method === 'PUT') {
-    if (await esFrozen()) {
-      sendJson(req, res, 403, { ok: false, error: 'La plantilla está bloqueada hasta la fecha de freeze' });
+    const phaseCheck = await checkPhaseConsistency(req, res);
+    if (!phaseCheck) return;
+    const fase = await getFaseJuego();
+    if (fase !== 'FASE_PRETEMPORADA') {
+      sendJson(req, res, 403, { ok: false, error: 'La plantilla esta bloqueada' });
       return;
     }
     const auth = authenticate(req);
@@ -624,6 +771,8 @@ const server = http.createServer(async (req, res) => {
 
   // Endpoint: Total de matchstats (ligero, para polling)
   if (reqUrl.pathname === '/api/match-stats/updated' && req.method === 'GET') {
+    const phaseCheck = await checkPhaseConsistency(req, res);
+    if (!phaseCheck) return;
     try {
       const result = await MatchStats.findOne({}, 'eventId lastUpdated').sort({ lastUpdated: -1 });
       const count = await MatchStats.countDocuments();
@@ -640,6 +789,8 @@ const server = http.createServer(async (req, res) => {
 
   // Endpoint: Estadísticas de un partido (scraping Sofascore - se mantiene en GitHub)
   if (reqUrl.pathname.startsWith('/api/match-stats/') && req.method === 'GET') {
+    const phaseCheck = await checkPhaseConsistency(req, res);
+    if (!phaseCheck) return;
     const eventId = reqUrl.pathname.split('/api/match-stats/')[1];
     if (!eventId || isNaN(eventId)) {
       sendJson(req, res, 400, { ok: false, error: 'ID de partido inválido' });
@@ -663,6 +814,8 @@ const server = http.createServer(async (req, res) => {
 
   // Endpoint: Obtener todos los matchstats
   if (reqUrl.pathname === '/api/match-stats' && req.method === 'GET') {
+    const phaseCheck = await checkPhaseConsistency(req, res);
+    if (!phaseCheck) return;
     try {
       const matchStats = await MatchStats.find({});
       sendJson(req, res, 200, { ok: true, matchStats });
@@ -694,11 +847,14 @@ const server = http.createServer(async (req, res) => {
 
   // Endpoint: Obtener predicciones de todos los usuarios
   if (reqUrl.pathname === '/api/predictions/all' && req.method === 'GET') {
+    const phaseCheck = await checkPhaseConsistency(req, res);
+    if (!phaseCheck) return;
     const auth = authenticate(req);
     try {
-      const frozen = await esFrozen();
+      const fase = await getFaseJuego();
+      const isPublic = fase !== 'FASE_PRETEMPORADA';
       let query;
-      if (frozen || !auth.ok) {
+      if (isPublic || !auth.ok) {
         query = User.find({}, 'username predictions finalPredictions');
       } else {
         query = User.find({ username: auth.username }, 'username predictions finalPredictions');
@@ -777,6 +933,8 @@ const server = http.createServer(async (req, res) => {
       saveProfile: 'POST /api/auth/profile',
       changePassword: 'POST /api/auth/change-password',
       config: 'GET /api/config',
+      adminFaseJuego: 'PUT /api/admin/fase-juego (admin)',
+      adminConfig: 'PUT /api/admin/config (admin)',
       avatarsTaken: 'GET /api/avatars/taken',
       players: 'GET /api/players',
       getPredictions: 'GET /api/predictions?username=xxxx',

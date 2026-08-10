@@ -114,7 +114,8 @@ export async function getProfile(username) {
 
   return {
     ok: true,
-    avatar: user.avatar || null
+    avatar: user.avatar || null,
+    isAdmin: user.isAdmin === true
   };
 }
 
