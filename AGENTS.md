@@ -60,7 +60,8 @@ api-porra/
 | Método | Ruta                  | Descripción                                    |
 |--------|-----------------------|------------------------------------------------|
 | GET    | `/api/predictions`    | Obtener predicciones de un usuario (username)  |
-| PUT    | `/api/predictions`    | Guardar predicciones de un usuario (username, predictions) |
+| PUT    | `/api/predictions`    | Guardar predicciones de un usuario (username, predictions). Bloqueado si predictionsConfirmed=true |
+| POST   | `/api/predictions/confirm` | Confirmar pronósticos de liga (permanente, requiere 144 completos) |
 | GET    | `/api/predictions/all`| Obtener predicciones de todos los usuarios (para cálculo de puntos) |
 
 ### Configuración y Avatares
