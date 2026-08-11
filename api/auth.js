@@ -97,7 +97,8 @@ export async function login(username, password) {
     token,
     user: {
       username: user.username,
-      avatar: user.avatar || null
+      avatar: user.avatar || null,
+      predictionsConfirmed: user.predictionsConfirmed === true
     }
   };
 }
@@ -115,7 +116,8 @@ export async function getProfile(username) {
   return {
     ok: true,
     avatar: user.avatar || null,
-    isAdmin: user.isAdmin === true
+    isAdmin: user.isAdmin === true,
+    predictionsConfirmed: user.predictionsConfirmed === true
   };
 }
 

@@ -722,7 +722,7 @@ const server = http.createServer(async (req, res) => {
     const fase = await getFaseJuego();
     const isPublic = fase !== 'FASE_PRETEMPORADA';
     if (!isPublic && (!auth.ok || auth.username !== username)) {
-      sendJson(req, res, 403, { ok: false, error: 'Solo puedes ver tus propios pronosticos finales' });
+      sendJson(req, res, 403, { ok: false, error: 'Solo puedes ver tus propios pronosticos de eliminatorias' });
       return;
     }
     const user = await User.findOne({ username: username.toLowerCase() });
@@ -740,7 +740,7 @@ const server = http.createServer(async (req, res) => {
     if (!phaseCheck) return;
     const fase = await getFaseJuego();
     if (fase !== 'FASE_PRETEMPORADA') {
-      sendJson(req, res, 403, { ok: false, error: 'Los pronosticos finales estan bloqueados' });
+      sendJson(req, res, 403, { ok: false, error: 'Los pronosticos de eliminatorias estan bloqueados' });
       return;
     }
     const auth = authenticate(req);
@@ -1025,6 +1025,7 @@ const server = http.createServer(async (req, res) => {
       players: 'GET /api/players',
       getPredictions: 'GET /api/predictions?username=xxxx',
       savePredictions: 'PUT /api/predictions',
+      confirmPredictions: 'POST /api/predictions/confirm',
       getFinalPredictions: 'GET /api/final-predictions?username=xxxx',
       saveFinalPredictions: 'PUT /api/final-predictions',
       getSquad: 'GET /api/squad?username=xxxx',
