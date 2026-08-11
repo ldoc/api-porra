@@ -660,13 +660,55 @@ const server = http.createServer(async (req, res) => {
       sendJson(req, res, 404, { ok: false, error: 'Usuario no encontrado' });
       return;
     }
+    if (user.predictionsConfirmed) {
+      sendJson(req, res, 403, { ok: false, error: 'Pronosticos ya confirmados, no se pueden editar' });
+      return;
+    }
     user.predictions = body.predictions;
     await user.save();
     sendJson(req, res, 200, { ok: true });
     return;
   }
 
-  // Endpoint: Obtener predicciones de fase final de un usuario
+  // Endpoint: Confirmar pronosticos de liga (permanente)
+  if (reqUrl.pathname === '/api/predictions/confirm' && req.method === 'POST') {
+    const phaseCheck = await checkPhaseConsistency(req, res);
+    if (!phaseCheck) return;
+    const auth = authenticate(req);
+    if (!auth.ok) {
+      sendJson(req, res, auth.status, { ok: false, error: auth.error });
+      return;
+    }
+    const user = await User.findOne({ username: auth.username });
+    if (!user) {
+      sendJson(req, res, 404, { ok: false, error: 'Usuario no encontrado' });
+      return;
+    }
+    if (user.predictionsConfirmed) {
+      sendJson(req, res, 409, { ok: false, error: 'Ya has confirmado tus pronosticos' });
+      return;
+    }
+    const predictions = user.predictions || {};
+    const gameConfig = await GameConfig.findById('gameConfig');
+    const totalMatches = gameConfig?.tournament?.totalMatches || 144;
+    let filledCount = 0;
+    for (const matchId of Object.keys(predictions)) {
+      const p = predictions[matchId];
+      if (p && typeof p.home === 'number' && typeof p.away === 'number') {
+        filledCount++;
+      }
+    }
+    if (filledCount < totalMatches) {
+      sendJson(req, res, 400, { ok: false, error: `Faltan pronosticos. Has completado ${filledCount} de ${totalMatches} partidos` });
+      return;
+    }
+    user.predictionsConfirmed = true;
+    await user.save();
+    sendJson(req, res, 200, { ok: true, predictionsConfirmed: true });
+    return;
+  }
+
+  // Endpoint: Obtener predicciones de eliminatorias de un usuario
   if (reqUrl.pathname === '/api/final-predictions' && req.method === 'GET') {
     const phaseCheck = await checkPhaseConsistency(req, res);
     if (!phaseCheck) return;
