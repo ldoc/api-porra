@@ -3,12 +3,18 @@ import http from 'http';
 import https from 'https';
 import crypto from 'crypto';
 import zlib from 'zlib';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import jwt from 'jsonwebtoken';
 import { connectDB, User, Invitation, MatchStats } from './db/index.js';
 import GameConfig from './db/models/GameConfig.js';
 import { register, login, getProfile, saveProfile, getTakenAvatars, getAllPlayers, getSquad, saveSquad, changePassword } from './api/auth.js';
 import { scrapMatchStats } from './scripts/matchStats.js';
 import { authenticate, rateLimiter, checkBodySize, setSecurityHeaders, validateUsername, authRateLimiter } from './api/middleware.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const PORT = process.env.PORT || 3000;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://porra-spa.vercel.app';
@@ -18,6 +24,14 @@ const loginLimiter = rateLimiter({ windowMs: 15 * 60 * 1000, max: 10 });
 const registerLimiter = rateLimiter({ windowMs: 15 * 60 * 1000, max: 5 });
 const globalLimiter = rateLimiter({ windowMs: 60 * 1000, max: 120 });
 const authenticatedLimiter = authRateLimiter({ windowMs: 60 * 1000, max: 30 });
+
+const POSITION_GROUPS = {
+  A: [9, 10, 23, 24],
+  B: [11, 12, 21, 22],
+  C: [13, 14, 19, 20],
+  D: [15, 16, 17, 18]
+};
+const MAX_TEAMS_PER_GROUP_PER_ZONE = 2;
 
 /**
  * Calcula los IDs de los 8 primeros equipos de la clasificación real
@@ -148,6 +162,127 @@ async function getTop8TeamIds() {
   }
 }
 
+/**
+ * Calcula la clasificación pronosticada de un usuario basándose en sus predicciones
+ * @param {Object} predictions - Objeto con predicciones { eventId: { home, away } }
+ * @returns {Promise<Array>} Array ordenado de equipos con { id, position }
+ */
+async function calculateUserStandings(predictions) {
+  try {
+    if (!predictions || Object.keys(predictions).length === 0) return [];
+
+    const calendar = await import('./data/sofascore/calendar.json', { assert: { type: 'json' } })
+      .then(m => m.default)
+      .catch(() => null);
+
+    if (!calendar) return [];
+
+    const teamStats = {};
+
+    for (const match of calendar) {
+      const pred = predictions[match.id];
+      if (!pred || pred.home === null || pred.away === null) continue;
+
+      const homeId = match.homeTeam?.id;
+      const awayId = match.awayTeam?.id;
+      if (!homeId || !awayId) continue;
+
+      for (const tid of [homeId, awayId]) {
+        if (!teamStats[tid]) {
+          teamStats[tid] = {
+            teamId: tid,
+            points: 0,
+            gf: 0,
+            gc: 0,
+            gd: 0,
+            wins: 0,
+            draws: 0,
+            losses: 0,
+            awayGoals: 0,
+            awayWins: 0,
+            matches: [],
+            rivals: new Set()
+          };
+        }
+      }
+
+      const home = teamStats[homeId];
+      const away = teamStats[awayId];
+
+      home.rivals.add(awayId);
+      away.rivals.add(homeId);
+
+      home.matches.push({ goalsFor: pred.home, goalsAgainst: pred.away, isHome: true, rivalId: awayId });
+      away.matches.push({ goalsFor: pred.away, goalsAgainst: pred.home, isHome: false, rivalId: homeId });
+
+      home.gf += pred.home;
+      home.gc += pred.away;
+      away.gf += pred.away;
+      away.gc += pred.home;
+
+      home.gd = home.gf - home.gc;
+      away.gd = away.gf - away.gc;
+
+      if (pred.home > pred.away) {
+        home.wins++;
+        home.points += 3;
+        away.losses++;
+      } else if (pred.home < pred.away) {
+        away.wins++;
+        away.points += 3;
+        home.losses++;
+      } else {
+        home.draws++;
+        home.points++;
+        away.draws++;
+        away.points++;
+      }
+
+      away.awayGoals += pred.away;
+      if (pred.away > pred.home) away.awayWins++;
+    }
+
+    const teams = Object.values(teamStats);
+
+    for (const team of teams) {
+      let rivalPointsSum = 0;
+      let rivalGDSum = 0;
+      let rivalGFSum = 0;
+
+      for (const rivalId of team.rivals) {
+        const rival = teamStats[rivalId];
+        if (rival) {
+          rivalPointsSum += rival.points;
+          rivalGDSum += rival.gd;
+          rivalGFSum += rival.gf;
+        }
+      }
+
+      team.rivalPointsSum = rivalPointsSum;
+      team.rivalGDSum = rivalGDSum;
+      team.rivalGFSum = rivalGFSum;
+    }
+
+    teams.sort((a, b) => {
+      if (b.points !== a.points) return b.points - a.points;
+      if (b.gd !== a.gd) return b.gd - a.gd;
+      if (b.gf !== a.gf) return b.gf - a.gf;
+      if (b.awayGoals !== a.awayGoals) return b.awayGoals - a.awayGoals;
+      if (b.wins !== a.wins) return b.wins - a.wins;
+      if (b.awayWins !== a.awayWins) return b.awayWins - a.awayWins;
+      if (b.rivalPointsSum !== a.rivalPointsSum) return b.rivalPointsSum - a.rivalPointsSum;
+      if (b.rivalGDSum !== a.rivalGDSum) return b.rivalGDSum - a.rivalGDSum;
+      if (b.rivalGFSum !== a.rivalGFSum) return b.rivalGFSum - a.rivalGFSum;
+      return 0;
+    });
+
+    return teams.map((t, i) => ({ id: t.teamId, position: i + 1 }));
+  } catch (err) {
+    console.error('Error calculating user standings:', err);
+    return [];
+  }
+}
+
 async function getFaseJuego() {
   try {
     const config = await GameConfig.findById('gameConfig');
@@ -198,7 +333,9 @@ async function verifyAdmin(req) {
   }
 }
 
-const FASES_VALIDAS = ['FASE_PRETEMPORADA', 'FASE_LIGA', 'FASE_PRE16'];
+const fasesPath = path.join(__dirname, 'data', 'fases.json');
+const fasesData = JSON.parse(fs.readFileSync(fasesPath, 'utf8'));
+const FASES_VALIDAS = fasesData.fases.map(f => f.nombre);
 
 function setCorsHeaders(req, res) {
   const origin = req.headers['origin'];
@@ -630,11 +767,6 @@ const server = http.createServer(async (req, res) => {
   if (reqUrl.pathname === '/api/predictions' && req.method === 'PUT') {
     const phaseCheck = await checkPhaseConsistency(req, res);
     if (!phaseCheck) return;
-    const fase = await getFaseJuego();
-    if (fase !== 'FASE_PRETEMPORADA') {
-      sendJson(req, res, 403, { ok: false, error: 'Los pronosticos estan bloqueados' });
-      return;
-    }
     const auth = authenticate(req);
     if (!auth.ok) {
       sendJson(req, res, auth.status, { ok: false, error: auth.error });
@@ -660,10 +792,62 @@ const server = http.createServer(async (req, res) => {
       sendJson(req, res, 404, { ok: false, error: 'Usuario no encontrado' });
       return;
     }
-    if (user.predictionsConfirmed) {
-      sendJson(req, res, 403, { ok: false, error: 'Pronosticos ya confirmados, no se pueden editar' });
-      return;
+    // Validar que solo se modifiquen partidos de la fase actual
+    const fase = await getFaseJuego();
+    const faseMap = {
+      'FASE_PRETEMPORADA': 'liga',
+      'FASE_LIGA': 'liga',
+      'FASE_PRE16': '16',
+      'FASE_16': '16',
+      'FASE_PRE8': '8',
+      'FASE_8': '8',
+      'FASE_PRE4': '4',
+      'FASE_4': '4',
+      'FASE_PRESEMIS': 'semis',
+      'FASE_SEMIS': 'semis',
+      'FASE_PREFINAL': 'final',
+      'FASE_FINAL': 'final',
+      'FASE_POSTFINAL': 'final'
+    };
+    const currentFase = faseMap[fase] || 'liga';
+
+    // Solo validar si no es fase pretemporada (en pretemporada se guardan predicciones de liga)
+    if (fase !== 'FASE_PRETEMPORADA') {
+      let calendar;
+      try {
+        calendar = await import('./data/sofascore/calendar.json', { assert: { type: 'json' } })
+          .then(m => m.default);
+      } catch {
+        calendar = null;
+      }
+
+      if (calendar) {
+        const matchFaseMap = {};
+        for (const match of calendar) {
+          matchFaseMap[match.id] = match.fase;
+        }
+
+        const existingPredictions = user.predictions || {};
+
+        for (const [eventId, pred] of Object.entries(body.predictions)) {
+          const matchFase = matchFaseMap[eventId];
+          if (matchFase && matchFase !== currentFase) {
+            const existing = existingPredictions[eventId];
+            const changed = !existing ||
+              existing.home !== pred.home ||
+              existing.away !== pred.away;
+            if (changed) {
+              sendJson(req, res, 403, {
+                ok: false,
+                error: `No se pueden modificar predicciones de la fase "${matchFase}". Solo se permiten cambios en la fase actual: "${currentFase}"`
+              });
+              return;
+            }
+          }
+        }
+      }
     }
+
     user.predictions = body.predictions;
     await user.save();
     sendJson(req, res, 200, { ok: true });
@@ -774,6 +958,50 @@ const server = http.createServer(async (req, res) => {
         if (invalidTeams.length > 0) {
           sendJson(req, res, 400, { ok: false, error: 'Los 8 primeros clasificados pasan directamente a octavos. No pueden asignarse a deciseisavos.' });
           return;
+        }
+      }
+    }
+
+    // Validación: restricciones por grupos de posiciones
+    const userForValidation = await User.findOne({ username: auth.username });
+    if (userForValidation && userForValidation.predictions) {
+      const standings = await calculateUserStandings(userForValidation.predictions);
+      if (standings && standings.length >= 24) {
+        const teamPositionMap = new Map();
+        standings.forEach((team, index) => {
+          teamPositionMap.set(team.id, index + 1);
+        });
+
+        const zones = [
+          { key: 'roundOf32', label: 'dieciseisavos' },
+          { key: 'roundOf16', label: 'octavos' },
+          { key: 'quarterFinalists', label: 'cuartos' },
+          { key: 'semiFinalists', label: 'semifinalistas' },
+          { key: 'runnerUp', label: 'subcampeón' },
+          { key: 'champion', label: 'campeón' }
+        ];
+
+        for (const zone of zones) {
+          const teamIds = zone.key === 'champion' ? [fp.champion] :
+                          zone.key === 'runnerUp' ? [fp.runnerUp] :
+                          fp[zone.key];
+
+          if (!teamIds || !Array.isArray(teamIds)) continue;
+
+          for (const [groupName, positions] of Object.entries(POSITION_GROUPS)) {
+            const count = teamIds.filter(id => {
+              const pos = teamPositionMap.get(id);
+              return pos && positions.includes(pos);
+            }).length;
+
+            if (count > MAX_TEAMS_PER_GROUP_PER_ZONE) {
+              sendJson(req, res, 400, {
+                ok: false,
+                error: `Máximo ${MAX_TEAMS_PER_GROUP_PER_ZONE} equipos de posiciones ${positions.join(',')} en ${zone.label}`
+              });
+              return;
+            }
+          }
         }
       }
     }

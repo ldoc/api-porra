@@ -1,7 +1,12 @@
 import https from 'https';
 import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-// Configurar ciphers específicos de Chrome para pasar el filtro de huella TLS
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const PROJECT_ROOT = path.resolve(__dirname, '..');
+
 const chromeCiphers = [
   'ECDHE-ECDSA-AES128-GCM-SHA256',
   'ECDHE-RSA-AES128-GCM-SHA256',
@@ -11,7 +16,13 @@ const chromeCiphers = [
   'ECDHE-RSA-CHACHA20-POLY1305'
 ].join(':');
 
-function fetchSofascore(endpointUrl) {
+const SOFA_BASE = 'https://www.sofascore.com/api/v1';
+
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function _fetchRaw(endpointUrl) {
   return new Promise((resolve, reject) => {
     const parsedUrl = new URL(endpointUrl);
 
@@ -61,36 +72,160 @@ function fetchSofascore(endpointUrl) {
   });
 }
 
-async function obtenerCalendario() {
-  try {
-    //https://www.sofascore.com/api/v1/unique-tournament/7/season/76953/events/round/1
-    // hay 8 rondas en la fase de liga
-    let partidosArray = [];
-    for (let i = 1; i <= 8; i++) {
-      const url = `https://www.sofascore.com/api/v1/unique-tournament/7/season/76953/events/round/${i}`;
-      const data = await fetchSofascore(url);
-      const partidos = data.events.map(p => ({
-        ronda: i,
-        id: p.id,
-        fecha: p.startTimestamp,
-        equipoLocal: {
-          id: p.homeTeam.id,
-          name: p.homeTeam.name
-        },
-        equipoVisitante: {
-          id: p.awayTeam.id,
-          name: p.awayTeam.name
-        }
-      }));
-      console.log('\n✅ JSON obtenido con éxito (' + partidos.length + ' partidos)');
-      // guardamos el json en un archivo llamado calendar.json
-      partidosArray.push(...partidos);
+async function fetchSofascore(endpointUrl, reintentos = 3) {
+  for (let intento = 1; intento <= reintentos; intento++) {
+    try {
+      return await _fetchRaw(endpointUrl);
+    } catch (err) {
+      if (intento === reintentos) throw err;
+      console.log(`    ⚠️ Intento ${intento} fallido, reintentando en 2s...`);
+      await delay(2000);
     }
-    await fs.writeFileSync(`data/sofascore/calendar.json`, JSON.stringify(partidosArray, null, 2));
-    return partidosArray;
-  }  catch (error) {
-    console.error('❌ Error:', error.message);
   }
 }
 
-obtenerCalendario();
+function buildUrl(template, params) {
+  let url = template;
+  for (const [key, value] of Object.entries(params)) {
+    url = url.replace(`{${key}}`, value);
+  }
+  return SOFA_BASE + url;
+}
+
+function mapEvent(p, fase, ronda) {
+  return {
+    ronda,
+    fase,
+    id: p.id,
+    fecha: p.startTimestamp,
+    equipoLocal: {
+      id: p.homeTeam.id,
+      name: p.homeTeam.name
+    },
+    equipoVisitante: {
+      id: p.awayTeam.id,
+      name: p.awayTeam.name
+    }
+  };
+}
+
+async function obtenerFase(faseNombre, faseConfig, config, rondaEspecifica = null) {
+  const params = {
+    tournamentId: config.tournamentId,
+    seasonId: config.seasonId
+  };
+
+  if (faseConfig.tipo === 'rondas') {
+    const partidos = [];
+    const inicio = rondaEspecifica || 1;
+    const fin = rondaEspecifica || faseConfig.rondas;
+    for (let ronda = inicio; ronda <= fin; ronda++) {
+      if (ronda > inicio) await delay(1500);
+      const url = buildUrl(faseConfig.urlTemplate, { ...params, ronda });
+      console.log(`  ⚽ Ronda ${ronda}: ${url}`);
+      const data = await fetchSofascore(url);
+      const faseValue = faseConfig.faseValue || faseNombre;
+      const mapped = data.events.map(p => mapEvent(p, faseValue, ronda));
+      partidos.push(...mapped);
+      console.log(`  ✅ Ronda ${ronda}: ${mapped.length} partidos`);
+    }
+    return partidos;
+  } else {
+    const url = buildUrl(faseConfig.urlTemplate, {
+      ...params,
+      roundId: faseConfig.roundId,
+      slug: faseConfig.slug
+    });
+    const faseValue = faseConfig.faseValue || faseNombre;
+    console.log(`  ⚽ ${faseNombre} (${faseValue}): ${url}`);
+    const data = await fetchSofascore(url);
+    const mapped = data.events.map(p => mapEvent(p, faseValue, 1));
+    console.log(`  ✅ ${faseNombre}: ${mapped.length} partidos`);
+    return mapped;
+  }
+}
+
+async function obtenerCalendario(fasesSolicitadas = null) {
+  const configPath = path.join(PROJECT_ROOT, 'data', 'sofascore', 'seasonConfig.json');
+  const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+
+  // Parsear fases: puede ser "liga", "liga:3", o null
+  const fasesParseadas = (fasesSolicitadas || Object.keys(config.fases)).map(f => {
+    const [nombre, ronda] = f.split(':');
+    return { nombre, ronda: ronda ? parseInt(ronda) : null };
+  });
+
+  // Leer calendario existente
+  const calendarPath = path.join(PROJECT_ROOT, 'data', 'sofascore', 'calendar.json');
+  let calendarioExistente = [];
+  if (fs.existsSync(calendarPath)) {
+    try {
+      const contenido = fs.readFileSync(calendarPath, 'utf8').trim();
+      if (contenido) {
+        calendarioExistente = JSON.parse(contenido);
+      }
+    } catch (e) {
+      console.warn('⚠️ calendar.json corrupto o vacío, empezando de cero');
+    }
+  }
+
+  // Filtrar partidos que se van a reemplazar
+  const nuevosPartidos = [];
+  for (const { nombre: faseNombre, ronda: rondaEspecifica } of fasesParseadas) {
+    const faseConfig = config.fases[faseNombre];
+    if (!faseConfig) {
+      console.error(`❌ Fase desconocida: ${faseNombre}`);
+      continue;
+    }
+
+    if (rondaEspecifica) {
+      // Solo eliminar partidos de esta fase+ronda concreta
+      calendarioExistente = calendarioExistente.filter(p =>
+        !(p.fase === faseNombre && p.ronda === rondaEspecifica)
+      );
+      console.log(`\n📡 Scrapeando fase: ${faseNombre} ronda ${rondaEspecifica}`);
+    } else {
+      // Eliminar TODOS los partidos de esta fase
+      calendarioExistente = calendarioExistente.filter(p => {
+        const faseDelPartido = p.fase || 'liga';
+        return faseDelPartido !== faseNombre;
+      });
+      console.log(`\n📡 Scrapeando fase: ${faseNombre} (todas las rondas)`);
+    }
+
+    const partidos = await obtenerFase(faseNombre, faseConfig, config, rondaEspecifica);
+    nuevosPartidos.push(...partidos);
+  }
+
+  // Merge: partidos no reemplazados + nuevos
+  const calendarioFinal = [...calendarioExistente, ...nuevosPartidos];
+
+  // Guardar en api-porra
+  fs.writeFileSync(calendarPath, JSON.stringify(calendarioFinal, null, 2));
+  console.log(`\n💾 Guardado: ${calendarPath} (${calendarioFinal.length} partidos total)`);
+
+  // Copiar a porra-spa
+  const porraSpaPath = path.join(PROJECT_ROOT, '..', 'porra-spa', 'data', 'calendar.json');
+  if (fs.existsSync(path.dirname(porraSpaPath))) {
+    fs.writeFileSync(porraSpaPath, JSON.stringify(calendarioFinal, null, 2));
+    console.log(`📋 Copiado a: ${porraSpaPath}`);
+  }
+
+  return calendarioFinal;
+}
+
+// Si se ejecuta directamente
+if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {
+  const fasesArg = process.argv.slice(2);
+  const fases = fasesArg.length > 0 ? fasesArg : null;
+  obtenerCalendario(fases)
+    .then(partidos => {
+      console.log(`\n🎉 Completado: ${partidos.length} partidos en total`);
+    })
+    .catch(err => {
+      console.error('❌ Error:', err.message);
+      process.exit(1);
+    });
+}
+
+export { obtenerCalendario, obtenerFase, fetchSofascore };

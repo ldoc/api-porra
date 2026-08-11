@@ -4,7 +4,6 @@ const gameConfigSchema = new mongoose.Schema({
   _id: { type: String, default: 'gameConfig' },
   faseJuego: {
     type: String,
-    enum: ['FASE_PRETEMPORADA', 'FASE_LIGA', 'FASE_PRE16'],
     default: 'FASE_PRETEMPORADA'
   },
   tournament: {

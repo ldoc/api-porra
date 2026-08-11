@@ -1,5 +1,7 @@
 # Instrucciones para Agentes IA - api-porra
 
+> **Fases de la competición**: Ver [`data/fases.json`](data/fases.json) para la definición completa de las 13 fases (instrucciones, reglas-app).
+
 ## Visión General
 
 API REST en Node.js para gestionar datos de fútbol (Liga de Campeones). Obtiene datos de Sofascore y los almacena en JSON local y en GitHub. Incluye sistema de autenticación de usuarios con JWT.
@@ -486,6 +488,65 @@ Esta puntuación aplica solo a los porteros. Los porteros recibirán una puntuac
 #### Puntuación por portería a cero
 
 Si al finalizar el partido el equipo no ha recibido goles, el portero recibirá una puntuación adicional positiva de 5 puntos (+5), y los defensas una puntuación adicional positiva de 2 puntos (+2), siempre y cuando en ambos casos hayan jugado más de 70 minutos.
+
+## Eliminatorias (Predicciones de Fase Final)
+
+### Descripción
+
+Los usuarios predicen el cuadro completo de eliminatorias de la Champions League, asignando 24 equipos clasificados de la fase de liga a cada ronda: campeón, subcampeón, semifinalistas, cuartos, octavos y dieciseisavos.
+
+### Distribución de Equipos
+
+| Ronda | Cantidad | Descripción |
+|-------|----------|-------------|
+| Campeón | 1 | Equipo ganador |
+| Subcampeón | 1 | Equipo finalista |
+| Semifinalistas | 2 | Equipos en semifinales |
+| Cuartos de final | 4 | Equipos en cuartos |
+| Octavos de final | 8 | Equipos en octavos |
+| Dieciseisavos | 8 | Equipos en dieciseisavos |
+| **Total** | **24** | |
+
+### Restricciones de Validación
+
+1. **Top-8 restriction**: Los equipos en puestos 1-8 de la clasificación pronosticada NO pueden colocarse en dieciseisavos (roundOf32)
+2. **Sin repetir equipos**: Cada equipo solo puede asignarse a una ronda
+3. **Restricciones por grupos de posiciones**: Para limitar la concentración de equipos de ciertos rangos en una misma ronda, se aplican los siguientes límites máximos (2 equipos por grupo por caja):
+
+   **En la caja de DIECISEISAVOS (roundOf32):**
+   - Máximo 2 equipos de los que acabaron en posiciones 9, 10, 23 y 24
+   - Máximo 2 equipos de los que acabaron en posiciones 11, 12, 21 y 22
+   - Máximo 2 equipos de los que acabaron en posiciones 13, 14, 19 y 20
+   - Máximo 2 equipos de los que acabaron en posiciones 15, 16, 17 y 18
+
+   **En el resto de las cajas (campeón, subcampeón, semifinalistas, cuartos, octavos):**
+   - Máximo 2 equipos de los que acabaron en posiciones 9, 10, 23 y 24
+   - Máximo 2 equipos de los que acabaron en posiciones 11, 12, 21 y 22
+   - Máximo 2 equipos de los que acabaron en posiciones 13, 14, 19 y 20
+   - Máximo 2 equipos de los que acabaron en posiciones 15, 16, 17 y 18
+
+   **Grupos de restricción:**
+   | Grupo | Posiciones |
+   |-------|------------|
+   | A | 9, 10, 23, 24 |
+   | B | 11, 12, 21, 22 |
+   | C | 13, 14, 19, 20 |
+   | D | 15, 16, 17, 18 |
+
+### Modelo de Datos
+
+```json
+{
+  "finalPredictions": {
+    "champion": "number|null (team ID)",
+    "runnerUp": "number|null (team ID)",
+    "semiFinalists": "[number] (max 2)",
+    "quarterFinalists": "[number] (max 4)",
+    "roundOf16": "[number] (max 8)",
+    "roundOf32": "[number] (max 8)"
+  }
+}
+```
 
 ## Configuración
 
