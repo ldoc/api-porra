@@ -1,6 +1,6 @@
 node_modules/
-data/
+data/*
+!data/fases.json
 .env
-data/users/
 opencode.json
 .opencode/

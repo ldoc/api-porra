@@ -1,0 +1,140 @@
+{
+  "fases": [
+    {
+      "id": 1,
+      "nombre": "FASE_PRETEMPORADA",
+      "instrucciones": "Hola {usuario}. Estamos de pretemporada, recuerda que antes de que empiece el primer partido de la jornada 1 debes tener pronosticados todos los partidos y tu plantilla ideal. Cuando termines de pronosticar los partidos valida tus resultados y podrás acceder a la pantalla de \"Eliminatorias\" donde debes elegir los puestos finales de cada equipo (de los 24 clasificados que hayas considerado de acuerdo a tus pronósticos). ¡Buena suerte!",
+      "reglas-app": [
+        "El usuario no puede ver los pronósticos de otros usuarios",
+        "El usuario puede pronosticar los 144 partidos de la FASE_LIGA, dichos partidos tendrán un identificador en el json del calendario como fase:\"liga\"",
+        "El usuario puede elegir su plantilla ideal",
+        "Una vez pronosticados todos los partidos de la FASE_LIGA el usuario puede validar sus pronósticos y acceder a los pronósticos de las \"Eliminatorias\", pero ya no podrá editar los pronósticos de partidos",
+        "En la pantalla de inicio se le informará al usuario si tiene pronósticos pendientes, tanto de partidos, plantilla como de eliminatorias"
+      ]
+    },
+    {
+      "id": 2,
+      "nombre": "FASE_LIGA",
+      "instrucciones": "¡La fase de liga ha comenzado, mucha suerte!",
+      "reglas-app": [
+        "Durante esta fase se disputan los partidos de la FASE_LIGA en calendar.js los marcados como fase:\"liga\"",
+        "El usuario ya tendrá acceso a poder ver los pronósticos de otros jugadores desde la pantalla de clasificación pinchando en cada usuario",
+        "Durante esta fase el usuario ya no podrá editar ni añadir ningún pronóstico de resultados de la fase:\"liga\", y tampoco de plantilla ni eliminatorias"
+      ]
+    },
+    {
+      "id": 3,
+      "nombre": "FASE_PRE16",
+      "instrucciones": "La fase de liga ha terminado. ¡Ahora tienes que rellenar los pronósticos para los partidos de knockout!",
+      "reglas-app": [
+        "FASE_LIGA ha terminado",
+        "El usuario tendrá acceso a poder meter los pronósticos de los partidos marcados en calendar.json como fase:\"16\"",
+        "Recuerda que solamente los pronósticos de fase:\"liga\" seguirán bloqueados así como los de plantillas y eliminatorias",
+        "En la pantalla de inicio se le avisará al usuario de si le queda algún pronóstico por añadir de esta fase de 16avos (knockout)"
+      ]
+    },
+    {
+      "id": 4,
+      "nombre": "FASE_16",
+      "instrucciones": "¡La fase de knockout ha comenzado, mucha suerte!",
+      "reglas-app": [
+        "Durante esta fase se disputan los partidos de la FASE_16 en calendar.js los marcados como fase:\"16\"",
+        "El usuario ya tendrá acceso a poder ver los pronósticos de fase:\"16\" de otros jugadores desde la pantalla de clasificación pinchando en cada usuario",
+        "Durante esta fase el usuario ya no podrá editar ni añadir ningún pronóstico de resultados de la fase:\"16\", y tampoco de plantilla ni eliminatorias"
+      ]
+    },
+    {
+      "id": 5,
+      "nombre": "FASE_PRE8",
+      "instrucciones": "La fase de 16avos ha terminado. ¡Ahora tienes que rellenar los pronósticos para los partidos de octavos de final!",
+      "reglas-app": [
+        "FASE_16 ha terminado",
+        "El usuario tendrá acceso a poder meter los pronósticos de los partidos marcados en calendar.json como fase:\"8\"",
+        "Recuerda que los pronósticos de las fases anteriores (liga y 16) seguirán bloqueados así como los de plantillas y eliminatorias",
+        "En la pantalla de inicio se le avisará al usuario de si le queda algún pronóstico por añadir de esta fase de octavos de final"
+      ]
+    },
+    {
+      "id": 6,
+      "nombre": "FASE_8",
+      "instrucciones": "¡La fase de octavos de final ha comenzado, mucha suerte!",
+      "reglas-app": [
+        "Durante esta fase se disputan los partidos de la FASE_8 en calendar.js los marcados como fase:\"8\"",
+        "El usuario ya tendrá acceso a poder ver los pronósticos de fase:\"8\" de otros jugadores desde la pantalla de clasificación pinchando en cada usuario",
+        "Durante esta fase el usuario ya no podrá editar ni añadir ningún pronóstico de resultados de la fase:\"8\", y tampoco de plantilla ni eliminatorias"
+      ]
+    },
+    {
+      "id": 7,
+      "nombre": "FASE_PRE4",
+      "instrucciones": "La fase de octavos de final ha terminado. ¡Ahora tienes que rellenar los pronósticos para los partidos de cuartos de final!",
+      "reglas-app": [
+        "FASE_8 ha terminado",
+        "El usuario tendrá acceso a poder meter los pronósticos de los partidos marcados en calendar.json como fase:\"4\"",
+        "Recuerda que los pronósticos de las fases anteriores seguirán bloqueados así como los de plantillas y eliminatorias",
+        "En la pantalla de inicio se le avisará al usuario de si le queda algún pronóstico por añadir de esta fase de cuartos de final"
+      ]
+    },
+    {
+      "id": 8,
+      "nombre": "FASE_4",
+      "instrucciones": "¡La fase de cuartos de final ha comenzado, mucha suerte!",
+      "reglas-app": [
+        "Durante esta fase se disputan los partidos de la FASE_4 en calendar.js los marcados como fase:\"4\"",
+        "El usuario ya tendrá acceso a poder ver los pronósticos de fase:\"4\" de otros jugadores desde la pantalla de clasificación pinchando en cada usuario",
+        "Durante esta fase el usuario ya no podrá editar ni añadir ningún pronóstico de resultados de la fase:\"4\" (ni de ninguna de las anteriores fases), y tampoco de plantilla ni eliminatorias"
+      ]
+    },
+    {
+      "id": 9,
+      "nombre": "FASE_PRESEMIS",
+      "instrucciones": "La fase de cuartos de final ha terminado. ¡Ahora tienes que rellenar los pronósticos para los partidos de semifinales!",
+      "reglas-app": [
+        "FASE_4 ha terminado",
+        "El usuario tendrá acceso a poder meter los pronósticos de los partidos marcados en calendar.json como fase:\"semis\"",
+        "Recuerda que los pronósticos de las fases anteriores seguirán bloqueados así como los de plantillas y eliminatorias",
+        "En la pantalla de inicio se le avisará al usuario de si le queda algún pronóstico por añadir de esta fase de semifinales"
+      ]
+    },
+    {
+      "id": 10,
+      "nombre": "FASE_SEMIS",
+      "instrucciones": "¡La fase de semifinales ha comenzado, mucha suerte!",
+      "reglas-app": [
+        "Durante esta fase se disputan los partidos de la FASE_SEMIS en calendar.js los marcados como fase:\"semis\"",
+        "El usuario ya tendrá acceso a poder ver los pronósticos de fase:\"semis\" de otros jugadores desde la pantalla de clasificación pinchando en cada usuario",
+        "Durante esta fase el usuario ya no podrá editar ni añadir ningún pronóstico de resultados de la fase:\"semis\" (ni de ninguna de las anteriores fases), y tampoco de plantilla ni eliminatorias"
+      ]
+    },
+    {
+      "id": 11,
+      "nombre": "FASE_PREFINAL",
+      "instrucciones": "La fase de semifinales ha terminado. ¡Ahora tienes que rellenar el pronóstico para la final, atina bien que ya solo queda este partido!",
+      "reglas-app": [
+        "FASE_SEMIS ha terminado",
+        "El usuario tendrá acceso a poder meter los pronósticos de los partidos marcados en calendar.json como fase:\"final\"",
+        "Recuerda que los pronósticos de las fases anteriores seguirán bloqueados así como los de plantillas y eliminatorias",
+        "En la pantalla de inicio se le avisará al usuario de si todavía no ha rellenado el pronóstico para la final"
+      ]
+    },
+    {
+      "id": 12,
+      "nombre": "FASE_FINAL",
+      "instrucciones": "¡Se va a disputar la final, ha sido un viaje duro pero ha merecido la pena, mucha suerte!",
+      "reglas-app": [
+        "Durante esta fase se disputa el partido de la FASE_FINAL en calendar.js el marcado como fase:\"final\"",
+        "El usuario ya tendrá acceso a poder ver los pronósticos de fase:\"final\" de otros jugadores desde la pantalla de clasificación pinchando en cada usuario",
+        "Durante esta fase el usuario ya no podrá editar ni añadir ningún pronóstico de resultados de la fase:\"final\" (ni de ninguna de las anteriores fases), y tampoco de plantilla ni eliminatorias"
+      ]
+    },
+    {
+      "id": 13,
+      "nombre": "FASE_POSTFINAL",
+      "instrucciones": "¡La porra ha terminado, gracias por participar, hasta el año que viene!",
+      "reglas-app": [
+        "La porra ha terminado",
+        "Los usuarios pueden seguir accediendo a las pantallas de resultados y clasificación para ver sus puntuaciones"
+      ]
+    }
+  ]
+}
