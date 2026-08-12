@@ -293,6 +293,22 @@ async function getFaseJuego() {
   }
 }
 
+/**
+ * Devuelve la fase del calendario cuyos pronósticos deben ocultarse a otros usuarios
+ * durante una fase PRE (en edición). Devuelve null si no aplica.
+ */
+function getHiddenFaseForOthers(faseJuego) {
+  if (faseJuego === 'FASE_PRETEMPORADA' || !faseJuego?.startsWith('FASE_PRE')) return null;
+  const faseMap = {
+    'FASE_PRE16': '16',
+    'FASE_PRE8': '8',
+    'FASE_PRE4': '4',
+    'FASE_PRESEMIS': 'semis',
+    'FASE_PREFINAL': 'final'
+  };
+  return faseMap[faseJuego] || null;
+}
+
 async function checkPhaseConsistency(req, res) {
   const clientPhase = req.headers['x-client-phase'];
   if (!clientPhase) {
@@ -1188,6 +1204,7 @@ const server = http.createServer(async (req, res) => {
     try {
       const fase = await getFaseJuego();
       const isPublic = fase !== 'FASE_PRETEMPORADA';
+      const hiddenFase = getHiddenFaseForOthers(fase);
       let query;
       if (isPublic || !auth.ok) {
         query = User.find({}, 'username predictions finalPredictions');
@@ -1195,13 +1212,41 @@ const server = http.createServer(async (req, res) => {
         query = User.find({ username: auth.username }, 'username predictions finalPredictions');
       }
       const users = await query;
+
+      // Construir mapa eventId → fase para filtrar predicciones de la fase oculta
+      let matchFaseMap = null;
+      if (hiddenFase) {
+        try {
+          const calendar = await import('./data/sofascore/calendar.json', { assert: { type: 'json' } })
+            .then(m => m.default);
+          matchFaseMap = {};
+          for (const match of calendar) {
+            matchFaseMap[match.id] = match.fase;
+          }
+        } catch {
+          matchFaseMap = null;
+        }
+      }
+
       const predictions = {};
       for (const user of users) {
         if (user.predictions && Object.keys(user.predictions).length > 0) {
-          predictions[user.username] = {
-            predictions: user.predictions,
-            finalPredictions: user.finalPredictions || null
-          };
+          let userPredictions = user.predictions;
+          // Ocultar a otros usuarios las predicciones de la fase en edición (fases PRE)
+          if (hiddenFase && matchFaseMap && auth.ok && user.username !== auth.username) {
+            userPredictions = {};
+            for (const [eventId, pred] of Object.entries(user.predictions)) {
+              if (matchFaseMap[eventId] !== hiddenFase) {
+                userPredictions[eventId] = pred;
+              }
+            }
+          }
+          if (Object.keys(userPredictions).length > 0) {
+            predictions[user.username] = {
+              predictions: userPredictions,
+              finalPredictions: user.finalPredictions || null
+            };
+          }
         }
       }
       sendJson(req, res, 200, { ok: true, predictions });
