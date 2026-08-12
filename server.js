@@ -439,7 +439,8 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     body.username = usernameValidation.username;
-    const result = await register(body.username, body.password, body.invitationCode);
+    const faseJuego = await getFaseJuego();
+    const result = await register(body.username, body.password, body.invitationCode, faseJuego);
     sendJson(req, res, result.ok ? 200 : 400, result);
     return;
   }

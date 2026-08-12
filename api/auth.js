@@ -20,7 +20,12 @@ function verifyPassword(password, stored) {
   return hash === hashToVerify;
 }
 
-export async function register(username, password, invitationCode) {
+export async function register(username, password, invitationCode, faseJuego) {
+  // Verificar que el registro esté abierto (solo FASE_PRETEMPORADA)
+  if (faseJuego && faseJuego !== 'FASE_PRETEMPORADA') {
+    return { ok: false, error: 'El registro está cerrado. La competición ya ha comenzado.' };
+  }
+
   if (!username || !password || !invitationCode) {
     return { ok: false, error: 'Usuario, contraseña y código de invitación son obligatorios' };
   }
