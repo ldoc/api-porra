@@ -12,6 +12,7 @@ import GameConfig from './db/models/GameConfig.js';
 import { register, login, getProfile, saveProfile, getTakenAvatars, getAllPlayers, getSquad, saveSquad, changePassword } from './api/auth.js';
 import { scrapMatchStats } from './scripts/matchStats.js';
 import { authenticate, rateLimiter, checkBodySize, setSecurityHeaders, validateUsername, authRateLimiter } from './api/middleware.js';
+import { getFinalPredictionsViolations } from './api/finalPredictions.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -24,14 +25,6 @@ const loginLimiter = rateLimiter({ windowMs: 15 * 60 * 1000, max: 10 });
 const registerLimiter = rateLimiter({ windowMs: 15 * 60 * 1000, max: 5 });
 const globalLimiter = rateLimiter({ windowMs: 60 * 1000, max: 120 });
 const authenticatedLimiter = authRateLimiter({ windowMs: 60 * 1000, max: 30 });
-
-const POSITION_GROUPS = {
-  A: [9, 10, 23, 24],
-  B: [11, 12, 21, 22],
-  C: [13, 14, 19, 20],
-  D: [15, 16, 17, 18]
-};
-const MAX_TEAMS_PER_GROUP_PER_ZONE = 2;
 
 /**
  * Calcula la clasificación pronosticada de un usuario basándose en sus predicciones
@@ -863,36 +856,10 @@ const server = http.createServer(async (req, res) => {
 
     // Validación: restricciones por grupos de posiciones
     if (standings && standings.length >= 24) {
-      const zones = [
-        { key: 'roundOf32', label: 'dieciseisavos' },
-        { key: 'roundOf16', label: 'octavos' },
-        { key: 'quarterFinalists', label: 'cuartos' },
-        { key: 'semiFinalists', label: 'semifinalistas' },
-        { key: 'runnerUp', label: 'subcampeón' },
-        { key: 'champion', label: 'campeón' }
-      ];
-
-      for (const zone of zones) {
-        const teamIds = zone.key === 'champion' ? [fp.champion] :
-                        zone.key === 'runnerUp' ? [fp.runnerUp] :
-                        fp[zone.key];
-
-        if (!teamIds || !Array.isArray(teamIds)) continue;
-
-        for (const [groupName, positions] of Object.entries(POSITION_GROUPS)) {
-          const count = teamIds.filter(id => {
-            const pos = teamPositionMap.get(id);
-            return pos && positions.includes(pos);
-          }).length;
-
-          if (count > MAX_TEAMS_PER_GROUP_PER_ZONE) {
-            sendJson(req, res, 400, {
-              ok: false,
-              error: `Máximo ${MAX_TEAMS_PER_GROUP_PER_ZONE} equipos de posiciones ${positions.join(',')} en ${zone.label}`
-            });
-            return;
-          }
-        }
+      const violations = getFinalPredictionsViolations(fp, teamPositionMap);
+      if (violations.length > 0) {
+        sendJson(req, res, 400, { ok: false, error: violations[0] });
+        return;
       }
     }
 
