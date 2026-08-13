@@ -1201,9 +1201,9 @@ const server = http.createServer(async (req, res) => {
       const hiddenFase = getHiddenFaseForOthers(fase);
       let query;
       if (isPublic || !auth.ok) {
-        query = User.find({}, 'username predictions finalPredictions');
+        query = User.find({}, 'username predictions finalPredictions squad');
       } else {
-        query = User.find({ username: auth.username }, 'username predictions finalPredictions');
+        query = User.find({ username: auth.username }, 'username predictions finalPredictions squad');
       }
       const users = await query;
 
@@ -1224,23 +1224,24 @@ const server = http.createServer(async (req, res) => {
 
       const predictions = {};
       for (const user of users) {
-        if (user.predictions && Object.keys(user.predictions).length > 0) {
-          let userPredictions = user.predictions;
-          // Ocultar a otros usuarios las predicciones de la fase en edición (fases PRE)
-          if (hiddenFase && matchFaseMap && auth.ok && user.username !== auth.username) {
-            userPredictions = {};
-            for (const [eventId, pred] of Object.entries(user.predictions)) {
-              if (matchFaseMap[eventId] !== hiddenFase) {
-                userPredictions[eventId] = pred;
-              }
+        let userPredictions = user.predictions || {};
+        if (hiddenFase && matchFaseMap && auth.ok && user.username !== auth.username) {
+          userPredictions = {};
+          for (const [eventId, pred] of Object.entries(user.predictions || {})) {
+            if (matchFaseMap[eventId] !== hiddenFase) {
+              userPredictions[eventId] = pred;
             }
           }
-          if (Object.keys(userPredictions).length > 0) {
-            predictions[user.username] = {
-              predictions: userPredictions,
-              finalPredictions: user.finalPredictions || null
-            };
-          }
+        }
+        const hasPredictions = Object.keys(userPredictions).length > 0;
+        const hasFinal = user.finalPredictions && Object.keys(user.finalPredictions).length > 0;
+        const hasSquad = Array.isArray(user.squad) && user.squad.length > 0;
+        if (hasPredictions || hasFinal || hasSquad) {
+          predictions[user.username] = {
+            predictions: userPredictions,
+            finalPredictions: user.finalPredictions || null,
+            squad: user.squad || null
+          };
         }
       }
       sendJson(req, res, 200, { ok: true, predictions });
