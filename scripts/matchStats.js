@@ -126,6 +126,14 @@ function processIncidents(incidentsData) {
     return { penaltiesScored, penaltiesSaved, goalsByGoalkeeper };
 }
 
+export function buildTeamStats(goles, tandaPenaltis) {
+    const stats = { goles };
+    if (tandaPenaltis !== undefined) {
+        stats.tandaPenaltis = tandaPenaltis;
+    }
+    return stats;
+}
+
 export async function scrapMatchStats(eventId) {
     const eventUrl = `https://www.sofascore.com/api/v1/event/${eventId}`;
     const lineupsUrl = `https://www.sofascore.com/api/v1/event/${eventId}/lineups`;
@@ -189,9 +197,12 @@ export async function scrapMatchStats(eventId) {
         mainGk.golesRecibidos = (mainGk.golesRecibidos || 0) + awayMissing;
     }
 
+    const homeTeamStats = buildTeamStats(homeGoals, ev.homeScore?.penalties);
+    const awayTeamStats = buildTeamStats(awayGoals, ev.awayScore?.penalties);
+
     return {
-        [homeId]: { goles: homeGoals },
-        [awayId]: { goles: awayGoals },
+        [homeId]: homeTeamStats,
+        [awayId]: awayTeamStats,
         jugadores: allPlayers
     };
 }
