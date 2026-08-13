@@ -23,7 +23,7 @@ export function getFinalPredictionsViolations(finalPredictions, teamPositionMap)
   const fp = finalPredictions || {};
   const violations = [];
 
-  const countGroupIn = (teamIds, positions) => (teamIds || [])
+  const countGroupIn = (teamIds, positions) => (Array.isArray(teamIds) ? teamIds : [])
     .filter(id => {
       const pos = teamPositionMap.get(id);
       return pos && positions.includes(pos);
@@ -33,9 +33,9 @@ export function getFinalPredictionsViolations(finalPredictions, teamPositionMap)
   const restTeams = [
     ...(fp.champion ? [fp.champion] : []),
     ...(fp.runnerUp ? [fp.runnerUp] : []),
-    ...(fp.semiFinalists || []),
-    ...(fp.quarterFinalists || []),
-    ...(fp.roundOf16 || [])
+    ...(Array.isArray(fp.semiFinalists) ? fp.semiFinalists : []),
+    ...(Array.isArray(fp.quarterFinalists) ? fp.quarterFinalists : []),
+    ...(Array.isArray(fp.roundOf16) ? fp.roundOf16 : [])
   ];
 
   for (const positions of Object.values(POSITION_GROUPS)) {

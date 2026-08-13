@@ -54,3 +54,7 @@ test('grupos B, C y D respetan sus límites', () => {
 test('nulls y placeholders falsy no cuentan', () => {
   assert.deepEqual(getFinalPredictionsViolations(fp({ roundOf16: [null, 10], roundOf32: [9, null, 23] }), posMap()), []);
 });
+
+test('payloads malformados no lanzan y devuelven sin violaciones', () => {
+  assert.deepEqual(getFinalPredictionsViolations(fp({ roundOf32: 5, semiFinalists: {} }), posMap()), []);
+});
