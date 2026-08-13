@@ -34,135 +34,6 @@ const POSITION_GROUPS = {
 const MAX_TEAMS_PER_GROUP_PER_ZONE = 2;
 
 /**
- * Calcula los IDs de los 8 primeros equipos de la clasificación real
- * Replica la lógica de desempate UCL del frontend (8 criterios)
- * @returns {Promise<number[]>} Array de 8 team IDs
- */
-async function getTop8TeamIds() {
-  try {
-    const allMatchStats = await MatchStats.find({}, 'stats').lean();
-    if (!allMatchStats || allMatchStats.length === 0) return [];
-
-    // Recopilar todos los team IDs y calcular estadísticas básicas
-    const teamStats = {};
-
-    for (const ms of allMatchStats) {
-      const stats = ms.stats;
-      if (!stats) continue;
-
-      const teamIds = Object.keys(stats).filter(k => k !== 'jugadores').map(Number);
-      if (teamIds.length !== 2) continue;
-
-      const [homeId, awayId] = teamIds;
-      const homeGoals = stats[homeId]?.goles ?? 0;
-      const awayGoals = stats[awayId]?.goles ?? 0;
-
-      // Inicializar equipos si no existen
-      for (const tid of teamIds) {
-        if (!teamStats[tid]) {
-          teamStats[tid] = {
-            teamId: tid,
-            points: 0,
-            gf: 0,
-            gc: 0,
-            gd: 0,
-            wins: 0,
-            draws: 0,
-            losses: 0,
-            awayGoals: 0,
-            awayWins: 0,
-            matches: [],
-            rivals: new Set()
-          };
-        }
-      }
-
-      const home = teamStats[homeId];
-      const away = teamStats[awayId];
-
-      // Registrar rivalidad
-      home.rivals.add(awayId);
-      away.rivals.add(homeId);
-
-      // Registrar partido para stats de rivales
-      home.matches.push({ goalsFor: homeGoals, goalsAgainst: awayGoals, isHome: true, rivalId: awayId });
-      away.matches.push({ goalsFor: awayGoals, goalsAgainst: homeGoals, isHome: false, rivalId: homeId });
-
-      // Goles
-      home.gf += homeGoals;
-      home.gc += awayGoals;
-      away.gf += awayGoals;
-      away.gc += homeGoals;
-
-      // Diferencia de goles
-      home.gd = home.gf - home.gc;
-      away.gd = away.gf - away.gc;
-
-      // Resultado
-      if (homeGoals > awayGoals) {
-        home.wins++;
-        home.points += 3;
-        away.losses++;
-      } else if (homeGoals < awayGoals) {
-        away.wins++;
-        away.points += 3;
-        home.losses++;
-      } else {
-        home.draws++;
-        home.points++;
-        away.draws++;
-        away.points++;
-      }
-
-      // Goles como visitante
-      away.awayGoals += awayGoals;
-      if (awayGoals > homeGoals) away.awayWins++;
-    }
-
-    const teams = Object.values(teamStats);
-
-    // Calcular stats de rivales (criterios 6-8)
-    for (const team of teams) {
-      let rivalPointsSum = 0;
-      let rivalGDSum = 0;
-      let rivalGFSum = 0;
-
-      for (const rivalId of team.rivals) {
-        const rival = teamStats[rivalId];
-        if (rival) {
-          rivalPointsSum += rival.points;
-          rivalGDSum += rival.gd;
-          rivalGFSum += rival.gf;
-        }
-      }
-
-      team.rivalPointsSum = rivalPointsSum;
-      team.rivalGDSum = rivalGDSum;
-      team.rivalGFSum = rivalGFSum;
-    }
-
-    // Ordenar con criterios de desempate UCL
-    teams.sort((a, b) => {
-      if (b.points !== a.points) return b.points - a.points;
-      if (b.gd !== a.gd) return b.gd - a.gd;
-      if (b.gf !== a.gf) return b.gf - a.gf;
-      if (b.awayGoals !== a.awayGoals) return b.awayGoals - a.awayGoals;
-      if (b.wins !== a.wins) return b.wins - a.wins;
-      if (b.awayWins !== a.awayWins) return b.awayWins - a.awayWins;
-      if (b.rivalPointsSum !== a.rivalPointsSum) return b.rivalPointsSum - a.rivalPointsSum;
-      if (b.rivalGDSum !== a.rivalGDSum) return b.rivalGDSum - a.rivalGDSum;
-      if (b.rivalGFSum !== a.rivalGFSum) return b.rivalGFSum - a.rivalGFSum;
-      return 0;
-    });
-
-    return teams.slice(0, 8).map(t => t.teamId);
-  } catch (err) {
-    console.error('Error calculating top 8 teams:', err);
-    return [];
-  }
-}
-
-/**
  * Calcula la clasificación pronosticada de un usuario basándose en sus predicciones
  * @param {Object} predictions - Objeto con predicciones { eventId: { home, away } }
  * @returns {Promise<Array>} Array ordenado de equipos con { id, position }
@@ -177,9 +48,12 @@ async function calculateUserStandings(predictions) {
 
     if (!calendar) return [];
 
+    // Solo se consideran los 144 partidos de la fase de liga
+    const calendarLiga = calendar.filter(m => m.fase === 'liga');
+
     const teamStats = {};
 
-    for (const match of calendar) {
+    for (const match of calendarLiga) {
       const pred = predictions[match.id];
       if (!pred || pred.home === null || pred.away === null) continue;
 
