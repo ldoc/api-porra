@@ -183,8 +183,8 @@ async function calculateUserStandings(predictions) {
       const pred = predictions[match.id];
       if (!pred || pred.home === null || pred.away === null) continue;
 
-      const homeId = match.homeTeam?.id;
-      const awayId = match.awayTeam?.id;
+      const homeId = match.equipoLocal?.id ?? match.homeTeam?.id;
+      const awayId = match.equipoVisitante?.id ?? match.awayTeam?.id;
       if (!homeId || !awayId) continue;
 
       for (const tid of [homeId, awayId]) {
@@ -965,59 +965,53 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    // Validación: los 8 primeros clasificados no pueden ir a deciseisavos
+    // Validación: los 8 primeros clasificados de la clasificación pronosticada no pueden ir a deciseisavos
     const fp = body.finalPredictions;
-    if (fp.roundOf32 && Array.isArray(fp.roundOf32) && fp.roundOf32.length > 0) {
-      const top8Ids = await getTop8TeamIds();
-      if (top8Ids.length > 0) {
-        const top8Set = new Set(top8Ids);
-        const invalidTeams = fp.roundOf32.filter(id => top8Set.has(id));
-        if (invalidTeams.length > 0) {
-          sendJson(req, res, 400, { ok: false, error: 'Los 8 primeros clasificados pasan directamente a octavos. No pueden asignarse a deciseisavos.' });
-          return;
-        }
+    const userForValidation = await User.findOne({ username: auth.username });
+    const standings = userForValidation?.predictions
+      ? await calculateUserStandings(userForValidation.predictions)
+      : [];
+    const teamPositionMap = new Map(standings.map((team, index) => [team.id, index + 1]));
+
+    if (fp.roundOf32 && Array.isArray(fp.roundOf32) && fp.roundOf32.length > 0 && teamPositionMap.size >= 8) {
+      const top8Set = new Set(standings.slice(0, 8).map(team => team.id));
+      const invalidTeams = fp.roundOf32.filter(id => top8Set.has(id));
+      if (invalidTeams.length > 0) {
+        sendJson(req, res, 400, { ok: false, error: 'Los 8 primeros clasificados pasan directamente a octavos. No pueden asignarse a deciseisavos.' });
+        return;
       }
     }
 
     // Validación: restricciones por grupos de posiciones
-    const userForValidation = await User.findOne({ username: auth.username });
-    if (userForValidation && userForValidation.predictions) {
-      const standings = await calculateUserStandings(userForValidation.predictions);
-      if (standings && standings.length >= 24) {
-        const teamPositionMap = new Map();
-        standings.forEach((team, index) => {
-          teamPositionMap.set(team.id, index + 1);
-        });
+    if (standings && standings.length >= 24) {
+      const zones = [
+        { key: 'roundOf32', label: 'dieciseisavos' },
+        { key: 'roundOf16', label: 'octavos' },
+        { key: 'quarterFinalists', label: 'cuartos' },
+        { key: 'semiFinalists', label: 'semifinalistas' },
+        { key: 'runnerUp', label: 'subcampeón' },
+        { key: 'champion', label: 'campeón' }
+      ];
 
-        const zones = [
-          { key: 'roundOf32', label: 'dieciseisavos' },
-          { key: 'roundOf16', label: 'octavos' },
-          { key: 'quarterFinalists', label: 'cuartos' },
-          { key: 'semiFinalists', label: 'semifinalistas' },
-          { key: 'runnerUp', label: 'subcampeón' },
-          { key: 'champion', label: 'campeón' }
-        ];
+      for (const zone of zones) {
+        const teamIds = zone.key === 'champion' ? [fp.champion] :
+                        zone.key === 'runnerUp' ? [fp.runnerUp] :
+                        fp[zone.key];
 
-        for (const zone of zones) {
-          const teamIds = zone.key === 'champion' ? [fp.champion] :
-                          zone.key === 'runnerUp' ? [fp.runnerUp] :
-                          fp[zone.key];
+        if (!teamIds || !Array.isArray(teamIds)) continue;
 
-          if (!teamIds || !Array.isArray(teamIds)) continue;
+        for (const [groupName, positions] of Object.entries(POSITION_GROUPS)) {
+          const count = teamIds.filter(id => {
+            const pos = teamPositionMap.get(id);
+            return pos && positions.includes(pos);
+          }).length;
 
-          for (const [groupName, positions] of Object.entries(POSITION_GROUPS)) {
-            const count = teamIds.filter(id => {
-              const pos = teamPositionMap.get(id);
-              return pos && positions.includes(pos);
-            }).length;
-
-            if (count > MAX_TEAMS_PER_GROUP_PER_ZONE) {
-              sendJson(req, res, 400, {
-                ok: false,
-                error: `Máximo ${MAX_TEAMS_PER_GROUP_PER_ZONE} equipos de posiciones ${positions.join(',')} en ${zone.label}`
-              });
-              return;
-            }
+          if (count > MAX_TEAMS_PER_GROUP_PER_ZONE) {
+            sendJson(req, res, 400, {
+              ok: false,
+              error: `Máximo ${MAX_TEAMS_PER_GROUP_PER_ZONE} equipos de posiciones ${positions.join(',')} en ${zone.label}`
+            });
+            return;
           }
         }
       }
