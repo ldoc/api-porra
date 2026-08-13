@@ -4,7 +4,7 @@ import { connectDB, disconnectDB, User } from '../db/index.js';
 
 // Uso: node scripts/resetUsersConfirm.js [usuario1] [usuario2] ...
 // Sin argumentos, resetea por defecto a leandro, marmoto y daniel.
-const DEFAULTS = ['leandro', 'marmoto', 'daniel'];
+const DEFAULTS = ['leandro'];
 const USERNAMES = process.argv.slice(2).length > 0 ? process.argv.slice(2) : DEFAULTS;
 
 await connectDB();
