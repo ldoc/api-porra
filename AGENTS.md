@@ -512,7 +512,7 @@ Los usuarios predicen el cuadro completo de eliminatorias de la Champions League
 
 ### Restricciones de Validación
 
-1. **Top-8 restriction**: Los equipos en puestos 1-8 de la clasificación pronosticada NO pueden colocarse en dieciseisavos
+1. **Top-8 restriction**: Los equipos en puestos 1-8 de la clasificación pronosticada NO pueden colocarse en dieciseisavos (roundOf32)
 2. **Sin repetir equipos**: Cada equipo solo puede asignarse a una ronda
 3. **Restricciones por grupos de posiciones**: Para limitar la concentración de equipos de ciertos rangos en una misma ronda, se aplican los siguientes límites máximos (2 equipos por grupo):
 
@@ -529,9 +529,6 @@ Los usuarios predicen el cuadro completo de eliminatorias de la Champions League
    - Máximo 2 equipos de los que acabaron en posiciones 15, 16, 17 y 18
 
    > El límite de las cajas fuera de dieciseisavos se aplica al CONJUNTO de todas ellas (no por caja individual). Ejemplo: con los equipos de posiciones 9, 10, 23 y 24, no se puede poner el 23 en cuartos, el 24 en semifinales y el 10 en octavos; 2 de ellos deben ir obligatoriamente a dieciseisavos.
-
-   **Espacio libre para los 8 primeros**
-   - Deja libre tantas cajas de octavos a la final como equipos de los 8 primeros te quedan por introducir
 
    **Grupos de restricción:**
    | Grupo | Posiciones |
