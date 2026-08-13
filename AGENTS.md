@@ -64,7 +64,7 @@ api-porra/
 | GET    | `/api/predictions`    | Obtener predicciones de un usuario (username)  |
 | PUT    | `/api/predictions`    | Guardar predicciones de un usuario (username, predictions). Bloqueado si predictionsConfirmed=true |
 | POST   | `/api/predictions/confirm` | Confirmar pronósticos de liga (permanente, requiere 144 completos) |
-| GET    | `/api/predictions/all`| Obtener predicciones de todos los usuarios (para cálculo de puntos) |
+| GET    | `/api/predictions/all`| Obtener predicciones, finalPredictions y plantillas de todos los usuarios (para cálculo de puntos) |
 
 ### Configuración y Avatares
 
@@ -297,12 +297,15 @@ api-porra/
   "ok": true,
   "predictions": {
     "juan123": {
-      "14566909": { "home": 2, "away": 1 },
-      "14566894": { "home": 0, "away": 0 }
-    },
-    "maria456": {
-      "14566909": { "home": 1, "away": 2 },
-      "14566894": { "home": 1, "away": 1 }
+      "predictions": {
+        "14566909": { "home": 2, "away": 1 }
+      },
+      "finalPredictions": {
+        "champion": 42
+      },
+      "squad": [
+        { "id": 804508, "nombre": "Viktor Gyökeres", "posicion": "F", "club": "Arsenal", "equipo": 42 }
+      ]
     }
   }
 }
