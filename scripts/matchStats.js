@@ -164,8 +164,8 @@ export async function scrapMatchStats(eventId) {
     await Promise.all(gkStatsPromises);
 
     const { penaltiesScored, goalsByGoalkeeper } = processIncidents(incidentsData);
-    const homeGoals = ev.homeScore?.current ?? 0;
-    const awayGoals = ev.awayScore?.current ?? 0;
+    const homeGoals = ev.homeScore?.display ?? 0;
+    const awayGoals = ev.awayScore?.display ?? 0;
 
     for (const player of allPlayers) {
         player.penaltiMarcado = penaltiesScored[player.id] || 0;
