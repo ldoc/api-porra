@@ -4,13 +4,13 @@
 
 ## Visión General
 
-API REST en Node.js para gestionar datos de fútbol (Liga de Campeones). Obtiene datos de Sofascore y los almacena en JSON local y en GitHub. Incluye sistema de autenticación de usuarios con JWT.
+API REST en Node.js para gestionar datos de fútbol (Liga de Campeones). Obtiene datos de Sofascore y los almacena en MongoDB Atlas. Incluye sistema de autenticación de usuarios con JWT.
 
 ## Stack Tecnológico
 
 - **Runtime**: Node.js (ES Modules)
 - **Servidor**: `http` nativo (sin frameworks)
-- **GitHub API**: Octokit para persistir ficheros en el repositorio
+- **Base de datos**: MongoDB Atlas con Mongoose (modelos User, Invitation, MatchStats, GameConfig)
 - **Fuente de datos**: Sofascore API (no oficial)
 - **Autenticación**: JWT (jsonwebtoken) + hash de contraseñas con scrypt (crypto nativo)
 
@@ -18,24 +18,32 @@ API REST en Node.js para gestionar datos de fútbol (Liga de Campeones). Obtiene
 
 ```
 api-porra/
-├── server.js              # Servidor HTTP principal
-├── github.js              # Funciones de persistencia en GitHub
-├── config.json            # Configuración del torneo (freeze date, etc.)
+├── server.js              # Servidor HTTP principal (enrutado de endpoints)
 ├── api/
-│   └── auth.js            # Módulo de autenticación (register/login/getTakenAvatars)
+│   ├── auth.js            # Módulo de autenticación y usuarios (register/login/squad)
+│   ├── middleware.js      # Middlewares: authenticate, rateLimiter, seguridad, CORS
+│   └── finalPredictions.js# Validación de predicciones de eliminatorias
+├── db/
+│   ├── connection.js      # Conexión a MongoDB
+│   ├── index.js           # Exporta modelos
+│   └── models/            # User, Invitation, MatchStats, GameConfig
 ├── scripts/
 │   ├── calendario.js      # Scraping de calendario de partidos
 │   ├── equipos.js         # Scraping de equipos + escudos
 │   ├── jugadores.js       # Scraping de jugadores + fotos
-│   └── matchStats.js      # Scraping de estadísticas de partidos
+│   ├── matchStats.js      # Scraping de estadísticas de partidos
+│   └── ...                # Otros scripts de scraping/utilidades
 ├── data/
-│   ├── sofascore/
-│   │   ├── calendar.json  # Calendario de partidos
-│   │   ├── teams.json     # Equipos
-│   │   ├── jugadores.json # Jugadores
-│   │   ├── imgEquipos/    # Escudos (PNG/WEBP)
-│   │   └── imgJugadores/  # Fotos de jugadores (PNG/WEBP)
-│   └── users/             # Usuarios registrados ({username}.json)
+│   ├── fases.json         # Definición de las 13 fases de la competición
+│   └── sofascore/
+│       ├── calendar.json  # Calendario de partidos
+│       ├── teams.json     # Equipos
+│       ├── jugadores.json # Jugadores
+│       ├── imgEquipos/    # Escudos (PNG/WEBP)
+│       ├── imgJugadores/  # Fotos de jugadores (PNG/WEBP)
+│       ├── partidos/      # Datos de partidos
+│       └── seasonConfig.json # Configuración de temporada de Sofascore
+├── tests/                 # Tests de validaciones (finalPredictions, matchStats)
 └── package.json
 ```
 
@@ -49,6 +57,7 @@ api-porra/
 | POST   | `/api/auth/login`     | Iniciar sesión (username, password)            |
 | GET    | `/api/auth/profile`   | Obtener perfil de usuario (username)           |
 | POST   | `/api/auth/profile`   | Guardar perfil de usuario (username, avatar)   |
+| POST   | `/api/auth/change-password` | Cambiar contraseña (currentPassword, newPassword) |
 
 ### Plantilla Ideal
 
@@ -56,6 +65,7 @@ api-porra/
 |--------|-----------------------|------------------------------------------------|
 | GET    | `/api/squad`          | Obtener plantilla ideal del usuario (username) |
 | PUT    | `/api/squad`          | Guardar plantilla ideal del usuario (username, squad) |
+| GET    | `/api/squad/all`      | Obtener plantillas de todos los usuarios (para cálculo de puntos) |
 
 ### Predicciones
 
@@ -66,11 +76,18 @@ api-porra/
 | POST   | `/api/predictions/confirm` | Confirmar pronósticos de liga (permanente, requiere 144 completos) |
 | GET    | `/api/predictions/all`| Obtener predicciones, finalPredictions y plantillas de todos los usuarios (para cálculo de puntos) |
 
+### Fase Final
+
+| Método | Ruta                  | Descripción                                    |
+|--------|-----------------------|------------------------------------------------|
+| GET    | `/api/final-predictions` | Obtener predicciones de eliminatorias de un usuario (username) |
+| PUT    | `/api/final-predictions` | Guardar predicciones de eliminatorias de un usuario (username, finalPredictions) |
+
 ### Configuración y Avatares
 
 | Método | Ruta                  | Descripción                                    |
 |--------|-----------------------|------------------------------------------------|
-| GET    | `/api/config`         | Configuración del torneo (freeze date, etc.)   |
+| GET    | `/api/config`         | Configuración del torneo (faseJuego, totalMatches, squadSize, squadFormation) |
 | GET    | `/api/avatars/taken`  | Lista de avatares ya cogidos por usuarios      |
 | GET    | `/api/players`        | Lista de todos los jugadores registrados       |
 
@@ -80,6 +97,8 @@ api-porra/
 |--------|-------------------------------|------------------------------------------------|
 | GET    | `/api/match-stats/:eventId`   | Scraping de estadísticas de un partido (Sofascore). Guarda en MongoDB (colección `matchstats`) |
 | GET    | `/api/match-stats`            | Obtener todos los matchstats almacenados en MongoDB (para cálculo de puntos) |
+| GET    | `/api/match-stats/updated`    | Contador de matchstats y última actualización  |
+| DELETE | `/api/match-stats/:eventId`   | Eliminar un matchstat por eventId              |
 
 ### Legacy (compatibilidad)
 
@@ -95,6 +114,8 @@ api-porra/
 | GET    | `/api/admin/invitations`      | Listar todos los códigos de invitación         |
 | POST   | `/api/admin/invitations`      | Crear nuevo código de invitación               |
 | DELETE | `/api/admin/invitations/:code`| Eliminar código no usado                       |
+| PUT    | `/api/admin/fase-juego`       | Cambiar la fase del juego (faseJuego)          |
+| PUT    | `/api/admin/config`           | Actualizar configuración completa (faseJuego, tournament) |
 
 ### Modelo de Datos de Usuario (auth)
 
@@ -133,7 +154,8 @@ api-porra/
         "paradas": 4,
         "esSuplente": false,
         "penaltiMarcado": 0,
-        "penaltiParado": 1
+        "penaltiParado": 1,
+        "golesRecibidos": 0
       }
     ]
   },
@@ -143,10 +165,10 @@ api-porra/
 
 ### Flujo de Registro
 
-1. Admin crea código de invitación con GET `/nuevoUsuario` → crea `data/users/EOW5.json` con `{"clave": "EOW5"}`
+1. Admin crea un código de invitación con POST `/api/admin/invitations` → se guarda en MongoDB (colección `invitations`) con `{ code, usedBy: null, createdAt }`
 2. Usuario se registra con POST `/api/auth/register` → body: `{username, password, invitationCode: "EOW5"}`
-3. Backend busca `data/users/EOW5.json` → si existe y NO tiene `passwordHash`, permite registro
-4. Guarda los datos del usuario en ese mismo fichero: `{clave, username, passwordHash, createdAt}`
+3. Backend valida que `FASE_PRETEMPORADA` esté activa y busca `Invitation.findOne({ code })`
+4. Si el código existe y `usedBy` es `null`, crea el usuario en MongoDB (colección `users`) con `{clave, username, passwordHash, createdAt}` y marca el código como usado (`usedBy = username`)
 5. Devuelve JWT para la sesión
 
 ### Respuesta Login/Register
@@ -183,8 +205,7 @@ api-porra/
 {
   "ok": true,
   "config": {
-    "championsFreezeDate": "2026-09-08T00:00:00Z",
-    "championsFreezeLabel": "Fase de Liga",
+    "faseJuego": "FASE_PRETEMPORADA",
     "totalMatches": 144,
     "squadSize": 25,
     "squadFormation": {
@@ -263,7 +284,8 @@ api-porra/
       "paradas": 4,
       "esSuplente": false,
       "penaltiMarcado": 0,
-      "penaltiParado": 1
+      "penaltiParado": 1,
+      "golesRecibidos": 0
     }
   ]
 }
@@ -319,34 +341,17 @@ El proyecto usa MongoDB Atlas para persistir datos de usuarios, invitaciones y e
 
 | Variable         | Descripción                                    | Ejemplo                          |
 |------------------|------------------------------------------------|----------------------------------|
-| `GITHUB_TOKEN`   | Personal Access Token con permisos de escritura | `ghp_...`                       |
 | `JWT_SECRET`     | Secreto para firmar tokens JWT                 | `mi-secreto-seguro`             |
 | `FRONTEND_URL`   | URL del frontend para CORS                     | `https://porra-spa.vercel.app`  |
 | `PORT`           | Puerto del servidor (default: 3000)            | `3000`                          |
 | `MONGODB_URI`    | URI de conexión a MongoDB Atlas                | `mongodb+srv://...`             |
 
-## Funciones de GitHub (github.js)
-
-```js
-import { guardarFichero, leerFichero, getUser, saveUser } from './github.js';
-
-// Guardar archivo genérico
-await guardarFichero("data/archivo.json", contenidoJSON, "Actualizar datos");
-
-// Leer archivo genérico
-const data = await leerFichero("data/archivo.json");
-
-// Obtener usuario por username
-const user = await getUser("nombreusuario");
-
-// Guardar/actualizar usuario
-await saveUser("nombreusuario", { username, passwordHash, avatar, createdAt });
-```
+> **Nota**: `GITHUB_TOKEN` ya no es necesaria. La persistencia GitHub se eliminó tras la migración a MongoDB (los ficheros `data/users/*.json` fueron borrados del repo). `github.js` y `scripts/migrateToMongo.js` fueron eliminados.
 
 ## Funciones de Auth (api/auth.js)
 
 ```js
-import { register, login, getProfile, saveProfile, getTakenAvatars, getAllPlayers, getSquad, saveSquad } from './api/auth.js';
+import { register, login, getProfile, saveProfile, getTakenAvatars, getAllPlayers, getSquad, saveSquad, changePassword } from './api/auth.js';
 
 // Registrar usuario
 const result = await register(username, password, invitationCode);
@@ -371,6 +376,9 @@ const squad = await getSquad(username); // [{ id, nombre, posicion, club, equipo
 
 // Guardar plantilla ideal del usuario
 const result = await saveSquad(username, squad); // { ok, squad }
+
+// Cambiar contraseña del usuario
+const result = await changePassword(username, currentPassword, newPassword); // { ok, message }
 ```
 
 ## Funciones de Scraping (scripts/)
@@ -387,8 +395,8 @@ const stats = await scrapMatchStats(eventId);
 
 - Las contraseñas se hashean con **scrypt** (crypto nativo de Node.js) - nunca se almacenan en texto plano
 - Los tokens JWT expiran en **7 días**
-- Los códigos de invitación se almacenan como ficheros JSON en GitHub (`data/users/{clave}.json`)
-- Un código de invitación solo se puede usar una vez (si el fichero ya tiene `passwordHash`, ya fue registrado)
+- Los códigos de invitación se almacenan en MongoDB (colección `invitations`) con `{ code, usedBy, createdAt }`
+- Un código de invitación solo se puede usar una vez (si `usedBy` ya tiene un valor, el código fue usado)
 - CORS configurado para permitir solo el origen del frontend
 
 ## Convenciones de Código
@@ -561,4 +569,4 @@ Los usuarios predicen el cuadro completo de eliminatorias de la Champions League
 ## Notas Importantes
 
 - Los scripts de scraping (`scripts/`) usan headers de Chrome para evitar bloqueos de Sofascore.
-- Los endpoints legacy (`/nuevoUsuario`, `/usuario`) se mantienen por compatibilidad.
+- El endpoint legacy `/usuario?clave=X` se mantiene por compatibilidad (la SPA no lo usa). Candidato a eliminación si no se necesita.
