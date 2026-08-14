@@ -143,10 +143,9 @@ api-porra/
 
 ### Legacy (compatibilidad)
 
-| Método | Ruta             | Descripción                                    |
-|--------|------------------|------------------------------------------------|
-| GET    | `/usuario?clave=X` | Obtener usuario por su clave                |
-| GET    | `/`              | Info del servidor y lista de endpoints         |
+| Método | Ruta | Descripción                                    |
+|--------|------|------------------------------------------------|
+| GET    | `/`  | Info del servidor y lista de endpoints         |
 
 ### Administración (requiere auth admin)
 
@@ -316,19 +315,16 @@ api-porra/
 
 ```json
 // GET /api/players
-// En FASE_PRETEMPORADA solo se devuelven name y avatar (sin puntos):
-// { "ok": true, "players": [{ "name": "usuario1", "avatar": "⚽" }] }
-// Fuera de pretemporada:
+// Solo nombre y avatar. Los puntos reales se calculan en el frontend
+// con GET /api/predictions/all + GET /api/match-stats.
 {
   "ok": true,
   "players": [
-    { "name": "usuario1", "avatar": "⚽", "points": 12, "hits": 3 },
-    { "name": "usuario2", "avatar": "🏆", "points": 8, "hits": 2 }
+    { "name": "usuario1", "avatar": "⚽" },
+    { "name": "usuario2", "avatar": "🏆" }
   ]
 }
 ```
-
-> **Nota**: `points`/`hits` no se almacenan en el schema de User; `getAllPlayers()` los devuelve como `0` si no existen. El cálculo real de puntos lo hace el frontend con `GET /api/predictions/all` + `GET /api/match-stats`.
 
 ### Respuesta Match Stats
 
@@ -434,7 +430,7 @@ const result = await saveProfile(username, { avatar });
 const taken = await getTakenAvatars(); // ['⚽', '🏆', ...]
 
 // Obtener todos los jugadores registrados (para clasificación)
-const players = await getAllPlayers(); // [{ name, avatar, points, hits }, ...]
+const players = await getAllPlayers(); // [{ name, avatar }, ...]
 
 // Obtener plantilla ideal del usuario
 const squad = await getSquad(username); // [{ id, nombre, posicion, club, equipo }, ...]
@@ -637,4 +633,3 @@ Los usuarios predicen el cuadro completo de eliminatorias de la Champions League
 ## Notas Importantes
 
 - Los scripts de scraping (`scripts/`) usan headers de Chrome para evitar bloqueos de Sofascore.
-- El endpoint legacy `/usuario?clave=X` se mantiene por compatibilidad (la SPA no lo usa). Candidato a eliminación si no se necesita.
