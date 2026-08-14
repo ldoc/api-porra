@@ -1086,37 +1086,11 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // Endpoint para obtener un usuario por su clave
-  if (reqUrl.pathname === '/usuario') {
-    const clave = reqUrl.searchParams.get('clave');
-    if (!clave) {
-      sendJson(req, res, 400, {
-        status: 'error',
-        message: 'Debe proporcionar una clave de usuario.'
-      });
-      return;
-    }
-
-    const usuario = await User.findOne({ clave: clave }, '-passwordHash -__v');
-    if (!usuario) {
-      sendJson(req, res, 404, {
-        status: 'error',
-        message: 'Usuario no encontrado.'
-      });
-      return;
-    }
-
-    sendJson(req, res, 200, usuario);
-    return;
-  }
-
-
   // Respuesta por defecto
   sendJson(req, res, 200, {
     status: 'ok',
     message: '¡Servidor Node.js activo y funcionando!',
     endpoints: {
-      usuario: '/usuario?clave=xxxx',
       register: 'POST /api/auth/register',
       login: 'POST /api/auth/login',
       getProfile: 'GET /api/auth/profile?username=xxxx',
