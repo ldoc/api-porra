@@ -602,22 +602,11 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // Endpoint: Todos los jugadores registrados (para clasificación)
   if (reqUrl.pathname === '/api/players' && req.method === 'GET') {
     const phaseCheck = await checkPhaseConsistency(req, res);
     if (!phaseCheck) return;
     const players = await getAllPlayers();
-    const fase = await getFaseJuego();
-    const showPoints = fase !== 'FASE_PRETEMPORADA';
-    if (!showPoints) {
-      // Pre-temporada: solo nombre y avatar (sin puntos ni aciertos)
-      sendJson(req, res, 200, {
-        ok: true,
-        players: players.map(p => ({ name: p.name, avatar: p.avatar }))
-      }, 300);
-    } else {
-      sendJson(req, res, 200, { ok: true, players }, 300);
-    }
+    sendJson(req, res, 200, { ok: true, players }, 300);
     return;
   }
 

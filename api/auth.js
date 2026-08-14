@@ -132,12 +132,10 @@ export async function getTakenAvatars() {
 }
 
 export async function getAllPlayers() {
-  const users = await User.find({}, 'username avatar points hits');
+  const users = await User.find({}, 'username avatar');
   return users.map(user => ({
     name: user.username,
     avatar: user.avatar || null,
-    points: user.points || 0,
-    hits: user.hits || 0,
   }));
 }
 
