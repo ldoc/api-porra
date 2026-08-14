@@ -1,5 +1,6 @@
 import https from 'https';
 import fs from 'node:fs';
+import sharp from 'sharp';
 
 
 // Configurar ciphers específicos de Chrome para pasar el filtro de huella TLS
@@ -17,6 +18,8 @@ const EMPTY_IMAGE = Buffer.from(
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
     'base64'
 );
+
+const EMPTY_IMAGE_WEBP = await sharp(EMPTY_IMAGE).webp({ quality: 85 }).toBuffer();
 
 function fetchSofascore(endpointUrl) {
     return new Promise((resolve, reject) => {
@@ -93,7 +96,7 @@ function fetchSofascoreImage(urlImagen) {
   
         if (res.statusCode === 404) {
           res.resume();
-          resolve(EMPTY_IMAGE);
+          resolve(EMPTY_IMAGE_WEBP);
           return;
         }
 
@@ -125,6 +128,13 @@ function fetchSofascoreImage(urlImagen) {
     return 'png';
   }
 
+  async function toWebpBuffer(buffer) {
+    if (buffer.length >= 12 && buffer.toString('ascii', 0, 4) === 'RIFF' && buffer.toString('ascii', 8, 12) === 'WEBP') {
+      return buffer;
+    }
+    return await sharp(buffer).webp({ quality: 85 }).toBuffer();
+  }
+
 async function obtenerJugadores() {
     try {
         console.log('Obteniendo json de equipos');
@@ -140,8 +150,8 @@ async function obtenerJugadores() {
                 const jugador = jugadoresEquipo.players[j];
                 // recuperamos la imagen del jugador (https://img.sofascore.com/api/v1/player/922573/image)
                 const image = await fetchSofascoreImage(`https://img.sofascore.com/api/v1/player/${jugador.player.id}/image`);
-                const ext = extensionFromImageBuffer(image);
-                fs.writeFileSync(`data/sofascore/imgJugadores/${jugador.player.id}.${ext}`, image);
+                const webp = await toWebpBuffer(image);
+                fs.writeFileSync(`data/sofascore/imgJugadores/${jugador.player.id}.webp`, webp);
                 jugadores.push({
                     id: jugador.player.id,
                     nombre: jugador.player.name,
