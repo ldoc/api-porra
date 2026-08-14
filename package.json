@@ -22,6 +22,7 @@
     "dotenv": "^17.4.2",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.9.1",
-    "octokit": "^5.0.5"
+    "octokit": "^5.0.5",
+    "sharp": "^0.35.3"
   }
 }

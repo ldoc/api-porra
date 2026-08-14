@@ -1,5 +1,6 @@
 import https from 'https';
 import fs from 'node:fs';
+import sharp from 'sharp';
 
 const url = 'https://www.sofascore.com/api/v1/unique-tournament/7/season/76953/standings/total';
 
@@ -18,6 +19,8 @@ const EMPTY_IMAGE = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
   'base64'
 );
+
+const EMPTY_IMAGE_WEBP = await sharp(EMPTY_IMAGE).webp({ quality: 85 }).toBuffer();
 
 function fetchSofascore(endpointUrl) {
   return new Promise((resolve, reject) => {
@@ -95,7 +98,7 @@ function fetchSofascoreImage(urlImagen) {
 
       if (res.statusCode === 404) {
         res.resume();
-        resolve(EMPTY_IMAGE);
+        resolve(EMPTY_IMAGE_WEBP);
         return;
       }
 
@@ -127,6 +130,13 @@ function extensionFromImageBuffer(buffer) {
   return 'png';
 }
 
+async function toWebpBuffer(buffer) {
+  if (buffer.length >= 12 && buffer.toString('ascii', 0, 4) === 'RIFF' && buffer.toString('ascii', 8, 12) === 'WEBP') {
+    return buffer;
+  }
+  return await sharp(buffer).webp({ quality: 85 }).toBuffer();
+}
+
 async function obtenerEquipos() {
   try {
     const data = await fetchSofascore(url);
@@ -139,8 +149,8 @@ async function obtenerEquipos() {
     for (const equipo of data.standings[0].rows) {
       // recuperamos la imagen del escudo del equipo (https://img.sofascore.com/api/v1/team/42/image)
       const image = await fetchSofascoreImage(`https://img.sofascore.com/api/v1/team/${equipo.team.id}/image`);
-      const ext = extensionFromImageBuffer(image);
-      fs.writeFileSync(`data/sofascore/imgEquipos/${equipo.team.id}.${ext}`, image);
+      const webp = await toWebpBuffer(image);
+      fs.writeFileSync(`data/sofascore/imgEquipos/${equipo.team.id}.webp`, webp);
       equipos.push({
         idCompetition: equipo.id,
         name: equipo.team.name,
