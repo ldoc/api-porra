@@ -2,6 +2,30 @@
 
 > **Fases de la competición**: Ver [`data/fases.json`](data/fases.json) para la definición completa de las 13 fases (instrucciones, reglas-app).
 
+## Índice
+
+1. [Visión General](#visión-general)
+2. [Stack Tecnológico](#stack-tecnológico)
+3. [Estructura del Proyecto](#estructura-del-proyecto)
+4. [API Endpoints](#api-endpoints-serverjs)
+5. [MongoDB](#mongodb)
+6. [Funciones de Auth](#funciones-de-auth-apiauthjs)
+7. [Funciones de Scraping](#funciones-de-scraping-scripts)
+8. [Seguridad](#seguridad)
+9. [Convenciones de Código](#convenciones-de-código)
+10. [Datos de Sofascore](#datos-de-sofascore)
+11. [Reglas de la Porra - Fase de Liga](#reglas-de-la-porra---fase-de-liga)
+12. [Eliminatorias](#eliminatorias-predicciones-de-fase-final)
+13. [Configuración](#configuración)
+14. [Notas Importantes](#notas-importantes)
+
+## Decisiones arquitectónicas
+
+- **Persistencia en MongoDB Atlas** (mongoose) para usuarios, invitaciones, matchstats y configuración. No hay persistencia en GitHub desde la migración.
+- **Control por fases (`faseJuego`)**: la fase actual en `GameConfig` determina edición (solo `FASE_PRETEMPORADA` para liga/plantilla/eliminatorias), visibilidad (fases `FASE_PRE*` ocultan datos de otros usuarios) y qué predicciones se pueden modificar.
+- **Frontend y backend desacoplados**: el frontend conoce la fase vía `GET /api/config` y la envía en `X-Client-Phase`; el backend devuelve `PHASE_CHANGED` (409) si hay desfase.
+- **Sofascore como única fuente de datos externa**; los endpoints de matchstats scrapean en vivo y cachean en Mongo (`matchstats`).
+
 ## Visión General
 
 API REST en Node.js para gestionar datos de fútbol (Liga de Campeones). Obtiene datos de Sofascore y los almacena en MongoDB Atlas. Incluye sistema de autenticación de usuarios con JWT.
@@ -76,6 +100,23 @@ api-porra/
 | POST   | `/api/predictions/confirm` | Confirmar pronósticos de liga (permanente, requiere 144 completos) |
 | GET    | `/api/predictions/all`| Obtener predicciones, finalPredictions y plantillas de todos los usuarios (para cálculo de puntos) |
 
+#### Sincronización de fase (cabecera `X-Client-Phase`)
+
+- El frontend envía la cabecera `X-Client-Phase` con la fase que el cliente cree que está activa (`getFaseJuego()`).
+- `checkPhaseConsistency` compara esa cabecera con la fase actual en MongoDB. Si difieren, responde **409** `{ ok:false, error:'PHASE_CHANGED', currentPhase, previousPhase }` para que el frontend recargue config y avise al usuario.
+- Si la cabecera no viene, la petición continúa sin comprobación.
+
+#### Validación de fase en PUT /api/predictions
+
+- Fuera de `FASE_PRETEMPORADA`, solo se permite **modificar predicciones de la fase actual** (mapeo `faseJuego → fase de calendario`: `FASE_PRETEMPORADA`/`FASE_LIGA`→`liga`, `FASE_PRE16`/`FASE_16`→`16`, `FASE_PRE8`/`FASE_8`→`8`, `FASE_PRE4`/`FASE_4`→`4`, `FASE_PRESEMIS`/`FASE_SEMIS`→`semis`, `FASE_PREFINAL`/`FASE_FINAL`/`FASE_POSTFINAL`→`final`).
+- Cambiar predicciones de otras fases devuelve **403**.
+
+#### Reglas de nombre de usuario (`validateUsername`)
+
+- Entre **3 y 20 caracteres**.
+- Solo `[a-z0-9_]` (minúsculas, números, guion bajo).
+- Se normaliza con `trim().toLowerCase()`.
+
 ### Fase Final
 
 | Método | Ruta                  | Descripción                                    |
@@ -127,12 +168,27 @@ api-porra/
   "avatar": "⚽",
   "createdAt": "2026-07-31T00:00:00.000Z",
   "squad": [
-    { "id": 804508, "nombre": "Viktor Gyökeres", "posicion": "F", "club": "Arsenal", "equipo": 42 },
-    { "id": 804509, "nombre": "Omar Marmoush", "posicion": "F", "club": "Man City", "equipo": 130 },
+    { "id": 804508, "nombre": "Viktor Gyökeres", "posicion": "F", "club": "Arsenal", "equipo": 42, "extension": "webp" },
+    { "id": 804509, "nombre": "Omar Marmoush", "posicion": "F", "club": "Man City", "equipo": 130, "extension": "webp" },
     ...
-  ]
+  ],
+  "predictions": {
+    "[eventId]": { "home": 2, "away": 1 }
+  },
+  "finalPredictions": {
+    "champion": 42,
+    "runnerUp": null,
+    "semiFinalists": [1, 2],
+    "quarterFinalists": [],
+    "roundOf16": [],
+    "roundOf32": []
+  },
+  "predictionsConfirmed": false,
+  "isAdmin": false
 }
 ```
+
+> **Nota**: `predictionsConfirmed` se pone a `true` al confirmar los 144 pronósticos (`POST /api/predictions/confirm`). `isAdmin` marca a los usuarios administradores (acceso a `/api/admin/*`).
 
 ### Modelo de Datos de MatchStats
 
@@ -174,24 +230,28 @@ api-porra/
 ### Respuesta Login/Register
 
 ```json
+// POST /api/auth/login (register devuelve user sin avatar)
 {
   "ok": true,
   "token": "eyJhbGciOiJIUzI1NiIs...",
-  "user": { "username": "nombreusuario", "avatar": "⚽" }
+  "user": { "username": "nombreusuario", "avatar": "⚽", "predictionsConfirmed": false }
 }
 ```
 
 ### Respuesta Profile
 
 ```json
-// GET /api/auth/profile?username=nombreusuario
+// GET /api/auth/profile (usa el token JWT; NO acepta ?username=)
+// Devuelve además isAdmin y predictionsConfirmed
 {
   "ok": true,
-  "avatar": "⚽"
+  "avatar": "⚽",
+  "isAdmin": false,
+  "predictionsConfirmed": false
 }
 
 // POST /api/auth/profile
-// Body: { "username": "nombreusuario", "avatar": "🏆" }
+// Body: { "avatar": "🏆" }  (el username sale del token JWT)
 {
   "ok": true,
   "avatar": "🏆"
@@ -256,6 +316,9 @@ api-porra/
 
 ```json
 // GET /api/players
+// En FASE_PRETEMPORADA solo se devuelven name y avatar (sin puntos):
+// { "ok": true, "players": [{ "name": "usuario1", "avatar": "⚽" }] }
+// Fuera de pretemporada:
 {
   "ok": true,
   "players": [
@@ -264,6 +327,8 @@ api-porra/
   ]
 }
 ```
+
+> **Nota**: `points`/`hits` no se almacenan en el schema de User; `getAllPlayers()` los devuelve como `0` si no existen. El cálculo real de puntos lo hace el frontend con `GET /api/predictions/all` + `GET /api/match-stats`.
 
 ### Respuesta Match Stats
 
@@ -388,7 +453,8 @@ import { scrapMatchStats } from './scripts/matchStats.js';
 
 // Scraping de estadísticas de un partido (evento + alineaciones)
 const stats = await scrapMatchStats(eventId);
-// Returns: { eventId, lastUpdated, event, lineups }
+// Returns: { [homeTeamId]: { goles, tandaPenaltis }, [awayTeamId]: { goles, tandaPenaltis }, jugadores: [...] }
+// Formato idéntico al que se guarda en Mongo y devuelve GET /api/match-stats/:eventId
 ```
 
 ## Seguridad
@@ -398,6 +464,8 @@ const stats = await scrapMatchStats(eventId);
 - Los códigos de invitación se almacenan en MongoDB (colección `invitations`) con `{ code, usedBy, createdAt }`
 - Un código de invitación solo se puede usar una vez (si `usedBy` ya tiene un valor, el código fue usado)
 - CORS configurado para permitir solo el origen del frontend
+- **Rate limits** (en `api/middleware.js`): login 10 req/15min, register 5 req/15min, peticiones globales 120 req/min, peticiones autenticadas 30 req/min
+- **Validación de username**: 3-20 caracteres, solo `[a-z0-9_]`, normalizado a minúsculas (`validateUsername`)
 
 ## Convenciones de Código
 
