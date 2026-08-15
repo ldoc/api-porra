@@ -13,6 +13,7 @@ import { register, login, getProfile, saveProfile, getTakenAvatars, getAllPlayer
 import { scrapMatchStats } from './scripts/matchStats.js';
 import { authenticate, rateLimiter, checkBodySize, setSecurityHeaders, validateUsername, authRateLimiter } from './api/middleware.js';
 import { getFinalPredictionsViolations } from './api/finalPredictions.js';
+import { validateFasesFechas } from './api/fasesFechas.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -417,7 +418,8 @@ const server = http.createServer(async (req, res) => {
             faseJuego: 'FASE_PRETEMPORADA',
             totalMatches: 144,
             squadSize: 25,
-            squadFormation: { G: 3, D: 8, M: 8, F: 6 }
+            squadFormation: { G: 3, D: 8, M: 8, F: 6 },
+            fasesFechas: {}
           }
         });
         return;
@@ -429,7 +431,8 @@ const server = http.createServer(async (req, res) => {
           faseJuego: config.faseJuego,
           totalMatches: config.tournament.totalMatches,
           squadSize: config.tournament.squadSize,
-          squadFormation: config.tournament.squadFormation
+          squadFormation: config.tournament.squadFormation,
+          fasesFechas: config.fasesFechas || {}
         }
       });
     } catch (e) {
@@ -520,6 +523,43 @@ const server = http.createServer(async (req, res) => {
       });
     } catch (error) {
       console.error('Error actualizando config:', error);
+      sendJson(req, res, 500, { ok: false, error: 'Error interno del servidor' });
+    }
+    return;
+  }
+
+  // Endpoint Admin: Actualizar fechas de inicio/fin de las fases
+  if (reqUrl.pathname === '/api/admin/fases-fechas' && req.method === 'PUT') {
+    const admin = await verifyAdmin(req);
+    if (!admin) {
+      sendJson(req, res, 403, { ok: false, error: 'Acceso denegado. Se requieren permisos de administrador.' });
+      return;
+    }
+    const body = await parseBody(req);
+    if (!body || body.__error) {
+      const status = body?.__error?.status || 400;
+      sendJson(req, res, status, { ok: false, error: body?.__error?.error || 'Body inválido' });
+      return;
+    }
+    const valid = validateFasesFechas(body.fasesFechas, FASES_VALIDAS);
+    if (!valid.ok) {
+      sendJson(req, res, 400, { ok: false, error: valid.error });
+      return;
+    }
+    try {
+      const config = await GameConfig.findByIdAndUpdate(
+        'gameConfig',
+        { $set: { fasesFechas: valid.fasesFechas, updatedBy: admin.username, updatedAt: new Date() } },
+        { new: true, upsert: true }
+      );
+      sendJson(req, res, 200, {
+        ok: true,
+        fasesFechas: config.fasesFechas,
+        updatedBy: config.updatedBy,
+        updatedAt: config.updatedAt
+      });
+    } catch (error) {
+      console.error('Error actualizando fechas de fases:', error);
       sendJson(req, res, 500, { ok: false, error: 'Error interno del servidor' });
     }
     return;

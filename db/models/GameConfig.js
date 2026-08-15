@@ -16,6 +16,7 @@ const gameConfigSchema = new mongoose.Schema({
       F: { type: Number, default: 6 }
     }
   },
+  fasesFechas: { type: Object, default: {} },
   updatedBy: { type: String },
   updatedAt: { type: Date }
 }, {
