@@ -45,3 +45,23 @@ test('rechaza fasesFechas que no es objeto', () => {
   assert.equal(validateFasesFechas(null, FASES).ok, false);
   assert.equal(validateFasesFechas('x', FASES).ok, false);
 });
+
+test('rechaza inicio igual al fin', () => {
+  const r = validateFasesFechas({
+    FASE_LIGA: { inicio: '2026-09-08T20:00:00.000Z', fin: '2026-09-08T20:00:00.000Z' }
+  }, FASES);
+  assert.equal(r.ok, false);
+  assert.match(r.error, /anterior al fin/);
+});
+
+test('rechaza rango que no es objeto', () => {
+  const r = validateFasesFechas({ FASE_LIGA: 42 }, FASES);
+  assert.equal(r.ok, false);
+  assert.match(r.error, /Rango inválido/);
+});
+
+test('rechaza fechas que no son string ni null ni vacío', () => {
+  const r = validateFasesFechas({ FASE_LIGA: { inicio: 42, fin: null } }, FASES);
+  assert.equal(r.ok, false);
+  assert.match(r.error, /Fecha de inicio inválida/);
+});

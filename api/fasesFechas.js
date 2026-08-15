@@ -13,9 +13,19 @@ export function validateFasesFechas(fasesFechas, fasesValidas) {
     if (!validas.has(nombre)) {
       return { ok: false, error: `Fase inválida: ${nombre}` };
     }
-    const r = rango || {};
-    const inicio = r.inicio == null || r.inicio === '' ? null : new Date(r.inicio);
-    const fin = r.fin == null || r.fin === '' ? null : new Date(r.fin);
+    if (!rango || typeof rango !== 'object' || Array.isArray(rango)) {
+      return { ok: false, error: `Rango inválido para ${nombre}` };
+    }
+    const inicioRaw = rango.inicio;
+    const finRaw = rango.fin;
+    if (inicioRaw != null && inicioRaw !== '' && typeof inicioRaw !== 'string') {
+      return { ok: false, error: `Fecha de inicio inválida en ${nombre}` };
+    }
+    if (finRaw != null && finRaw !== '' && typeof finRaw !== 'string') {
+      return { ok: false, error: `Fecha de fin inválida en ${nombre}` };
+    }
+    const inicio = inicioRaw == null || inicioRaw === '' ? null : new Date(inicioRaw);
+    const fin = finRaw == null || finRaw === '' ? null : new Date(finRaw);
     if (inicio && isNaN(inicio.getTime())) {
       return { ok: false, error: `Fecha de inicio inválida en ${nombre}` };
     }
