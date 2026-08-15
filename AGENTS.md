@@ -46,6 +46,7 @@ api-porra/
 ├── api/
 │   ├── auth.js            # Módulo de autenticación y usuarios (register/login/squad)
 │   ├── middleware.js      # Middlewares: authenticate, rateLimiter, seguridad, CORS
+│   ├── fasesFechas.js     # Validación y normalización de fechas de inicio/fin de fases
 │   └── finalPredictions.js# Validación de predicciones de eliminatorias
 ├── db/
 │   ├── connection.js      # Conexión a MongoDB
@@ -128,7 +129,7 @@ api-porra/
 
 | Método | Ruta                  | Descripción                                    |
 |--------|-----------------------|------------------------------------------------|
-| GET    | `/api/config`         | Configuración del torneo (faseJuego, totalMatches, squadSize, squadFormation) |
+| GET    | `/api/config`         | Configuración del torneo (faseJuego, totalMatches, squadSize, squadFormation, fasesFechas) |
 | GET    | `/api/avatars/taken`  | Lista de avatares ya cogidos por usuarios      |
 | GET    | `/api/players`        | Lista de todos los jugadores registrados       |
 
@@ -156,6 +157,9 @@ api-porra/
 | DELETE | `/api/admin/invitations/:code`| Eliminar código no usado                       |
 | PUT    | `/api/admin/fase-juego`       | Cambiar la fase del juego (faseJuego)          |
 | PUT    | `/api/admin/config`           | Actualizar configuración completa (faseJuego, tournament) |
+| PUT    | `/api/admin/fases-fechas`     | Actualizar fechas de inicio/fin de las fases (fasesFechas) |
+
+> `GameConfig` guarda un campo `fasesFechas` (`Object`, default `{}`) con las fechas de inicio/fin de cada fase: `{ FASE_X: { inicio, fin } }`, donde cada fecha es un string ISO o `null` (desconocida). `PUT /api/admin/fases-fechas` valida que las claves sean fases válidas (de las 13 definidas en `data/fases.json`) y que `inicio < fin` (módulo `api/fasesFechas.js`). `GET /api/config` lo devuelve dentro de `config.fasesFechas`.
 
 ### Modelo de Datos de Usuario (auth)
 
@@ -261,6 +265,9 @@ api-porra/
 
 ```json
 // GET /api/config
+// fasesFechas: { FASE_X: { inicio, fin } } — fechas de inicio/fin de cada una de las 13 fases.
+// Cada fecha es un string ISO o null si aún no se conoce. Si el documento GameConfig no existe,
+// se devuelve fasesFechas vacío ({}).
 {
   "ok": true,
   "config": {
@@ -272,6 +279,21 @@ api-porra/
       "D": 8,
       "M": 8,
       "F": 6
+    },
+    "fasesFechas": {
+      "FASE_PRETEMPORADA": { "inicio": null, "fin": "2026-09-07T22:00:00.000Z" },
+      "FASE_LIGA": { "inicio": "2026-09-08T18:45:00.000Z", "fin": "2026-12-10T21:00:00.000Z" },
+      "FASE_PRE16": { "inicio": null, "fin": null },
+      "FASE_16": { "inicio": null, "fin": null },
+      "FASE_PRE8": { "inicio": null, "fin": null },
+      "FASE_8": { "inicio": null, "fin": null },
+      "FASE_PRE4": { "inicio": null, "fin": null },
+      "FASE_4": { "inicio": null, "fin": null },
+      "FASE_PRESEMIS": { "inicio": null, "fin": null },
+      "FASE_SEMIS": { "inicio": null, "fin": null },
+      "FASE_PREFINAL": { "inicio": null, "fin": null },
+      "FASE_FINAL": { "inicio": null, "fin": null },
+      "FASE_POSTFINAL": { "inicio": null, "fin": null }
     }
   }
 }
