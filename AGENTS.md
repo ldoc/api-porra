@@ -214,7 +214,8 @@ api-porra/
         "esSuplente": false,
         "penaltiMarcado": 0,
         "penaltiParado": 1,
-        "golesRecibidos": 0
+        "golesRecibidos": 0,
+        "asistencias": 0
       }
     ]
   },

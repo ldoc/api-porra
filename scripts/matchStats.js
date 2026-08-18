@@ -58,7 +58,7 @@ function fetchSofascore(endpointUrl) {
     });
 }
 
-function processPlayer(playerEntry, teamId) {
+function processPlayer(playerEntry, teamId, assistsMap) {
     const p = playerEntry.player;
     const s = playerEntry.statistics || {};
 
@@ -73,7 +73,8 @@ function processPlayer(playerEntry, teamId) {
         paradas: s.saves || 0,
         esSuplente: playerEntry.substitute || false,
         penaltiMarcado: 0,
-        penaltiParado: 0
+        penaltiParado: 0,
+        asistencias: assistsMap[String(p.id)] || 0
     };
 }
 
@@ -138,12 +139,24 @@ export async function scrapMatchStats(eventId) {
     const eventUrl = `https://www.sofascore.com/api/v1/event/${eventId}`;
     const lineupsUrl = `https://www.sofascore.com/api/v1/event/${eventId}/lineups`;
     const incidentsUrl = `https://www.sofascore.com/api/v1/event/${eventId}/incidents`;
+    const fantasyUrl = `https://www.sofascore.com/api/v1/fantasy/event/${eventId}`;
 
-    const [eventData, lineupsData, incidentsData] = await Promise.all([
+    const [eventData, lineupsData, incidentsData, fantasyData] = await Promise.all([
         fetchSofascore(eventUrl),
         fetchSofascore(lineupsUrl),
-        fetchSofascore(incidentsUrl).catch(() => null)
+        fetchSofascore(incidentsUrl).catch(() => null),
+        fetchSofascore(fantasyUrl).catch(() => null)
     ]);
+
+    const assistsMap = {};
+    if (fantasyData?.playerStatistics) {
+        for (const ps of fantasyData.playerStatistics) {
+            const assistsStat = ps.statistics?.find(s => s.key === 'assists');
+            if (assistsStat) {
+                assistsMap[String(ps.playerId)] = parseInt(assistsStat.value, 10) || 0;
+            }
+        }
+    }
 
     const ev = eventData.event;
     const homeTeamId = ev.homeTeam?.id;
@@ -151,8 +164,8 @@ export async function scrapMatchStats(eventId) {
     const homeId = String(homeTeamId);
     const awayId = String(awayTeamId);
 
-    const homePlayers = (lineupsData.home?.players || []).map(p => processPlayer(p, homeTeamId));
-    const awayPlayers = (lineupsData.away?.players || []).map(p => processPlayer(p, awayTeamId));
+    const homePlayers = (lineupsData.home?.players || []).map(p => processPlayer(p, homeTeamId, assistsMap));
+    const awayPlayers = (lineupsData.away?.players || []).map(p => processPlayer(p, awayTeamId, assistsMap));
 
     const allPlayers = [...homePlayers, ...awayPlayers];
 
