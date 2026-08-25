@@ -13,7 +13,8 @@ const matchStatsSchema = new mongoose.Schema({
   },
   lastUpdated: {
     type: Date,
-    default: Date.now
+    default: Date.now,
+    index: -1
   }
 });
 

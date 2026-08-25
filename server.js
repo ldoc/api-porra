@@ -15,6 +15,7 @@ import { authenticate, rateLimiter, checkBodySize, setSecurityHeaders, validateU
 import { getFinalPredictionsViolations } from './api/finalPredictions.js';
 import { validateFasesFechas } from './api/fasesFechas.js';
 import { computeWeakEtag, etagMatches } from './api/etag.js';
+import { parseSinceParam } from './api/matchStatsFilter.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1047,8 +1048,14 @@ const server = http.createServer(async (req, res) => {
     const phaseCheck = await checkPhaseConsistency(req, res);
     if (!phaseCheck) return;
     try {
-      const matchStats = await MatchStats.find({});
-      sendJson(req, res, 200, { ok: true, matchStats });
+      const sinceResult = parseSinceParam(reqUrl.searchParams.get('since'));
+      if (!sinceResult.ok) {
+        sendJson(req, res, 400, { ok: false, error: 'Parámetro since inválido' });
+        return;
+      }
+      const filter = sinceResult.date ? { lastUpdated: { $gt: sinceResult.date } } : {};
+      const matchStats = await MatchStats.find(filter);
+      sendJson(req, res, 200, { ok: true, matchStats, serverTime: new Date().toISOString() });
     } catch (e) {
       sendJson(req, res, 500, { ok: false, error: 'Error al obtener estadísticas' });
     }
