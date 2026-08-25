@@ -1053,7 +1053,8 @@ const server = http.createServer(async (req, res) => {
         sendJson(req, res, 400, { ok: false, error: 'Parámetro since inválido' });
         return;
       }
-      const serverTime = new Date().toISOString();
+      const lastDoc = await MatchStats.findOne({}, { lastUpdated: 1 }).sort({ lastUpdated: -1 }).lean();
+      const serverTime = lastDoc ? lastDoc.lastUpdated.toISOString() : null;
       const filter = sinceResult.date ? { lastUpdated: { $gt: sinceResult.date } } : {};
       const matchStats = await MatchStats.find(filter);
       sendJson(req, res, 200, { ok: true, matchStats, serverTime });
