@@ -1056,7 +1056,7 @@ const server = http.createServer(async (req, res) => {
       const lastDoc = await MatchStats.findOne({}, { lastUpdated: 1 }).sort({ lastUpdated: -1 }).lean();
       const serverTime = lastDoc ? lastDoc.lastUpdated.toISOString() : null;
       const filter = sinceResult.date ? { lastUpdated: { $gt: sinceResult.date } } : {};
-      const matchStats = await MatchStats.find(filter);
+      const matchStats = await MatchStats.find(filter).sort({ eventId: 1 });
       sendJson(req, res, 200, { ok: true, matchStats, serverTime });
     } catch (e) {
       sendJson(req, res, 500, { ok: false, error: 'Error al obtener estadísticas' });
