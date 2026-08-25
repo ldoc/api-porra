@@ -25,6 +25,8 @@
 - **Control por fases (`faseJuego`)**: la fase actual en `GameConfig` determina edición (solo `FASE_PRETEMPORADA` para liga/plantilla/eliminatorias), visibilidad (fases `FASE_PRE*` ocultan datos de otros usuarios) y qué predicciones se pueden modificar.
 - **Frontend y backend desacoplados**: el frontend conoce la fase vía `GET /api/config` y la envía en `X-Client-Phase`; el backend devuelve `PHASE_CHANGED` (409) si hay desfase.
 - **Sofascore como única fuente de datos externa**; los endpoints de matchstats scrapean en vivo y cachean en Mongo (`matchstats`).
+- **Caché HTTP (ETag/304)**: todo `sendJson` con GET y status 200 calcula un `ETag` débil (SHA-1 del JSON sin comprimir, módulo `api/etag.js`) y responde **304 sin cuerpo** si `If-None-Match` coincide. POST/PUT/DELETE y errores 4xx/5xx no llevan ETag. Implicación: el cuerpo de una respuesta 200 debe ser **determinista** (nada de timestamps por petición) o el 304 deja de funcionar.
+- **Delta de matchstats**: `GET /api/match-stats?since=<ISO>` filtra `{ lastUpdated: { $gt: since } }` (índice `lastUpdated: -1`, orden fijo por `eventId`). La respuesta incluye `serverTime` = `max(lastUpdated)` de la colección (determinista, sirve de cursor para el siguiente `since`; `null` con colección vacía). Sin `since` → respuesta completa clásica. El frontend usa SIEMPRE el `serverTime` del backend como cursor (nunca su reloj local).
 
 ## Visión General
 
@@ -138,7 +140,7 @@ api-porra/
 | Método | Ruta                          | Descripción                                    |
 |--------|-------------------------------|------------------------------------------------|
 | GET    | `/api/match-stats/:eventId`   | Scraping de estadísticas de un partido (Sofascore). Guarda en MongoDB (colección `matchstats`) |
-| GET    | `/api/match-stats`            | Obtener todos los matchstats almacenados en MongoDB (para cálculo de puntos) |
+| GET    | `/api/match-stats`            | Obtener todos los matchstats almacenados en MongoDB (para cálculo de puntos). Acepta `?since=<ISO>` (delta por `lastUpdated`; añade `serverTime`). `since` malformado → 400 |
 | GET    | `/api/match-stats/updated`    | Contador de matchstats y última actualización  |
 | DELETE | `/api/match-stats/:eventId`   | Eliminar un matchstat por eventId              |
 
@@ -379,8 +381,11 @@ api-porra/
 
 ```json
 // GET /api/match-stats
+// serverTime = max(lastUpdated) de la colección (determinista; null si no hay datos).
+// El cliente lo usa como ?since= del siguiente delta.
 {
   "ok": true,
+  "serverTime": "2026-08-25T10:00:00.000Z",
   "matchStats": [
     {
       "eventId": 14566909,
