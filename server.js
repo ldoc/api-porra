@@ -1053,9 +1053,10 @@ const server = http.createServer(async (req, res) => {
         sendJson(req, res, 400, { ok: false, error: 'Parámetro since inválido' });
         return;
       }
+      const serverTime = new Date().toISOString();
       const filter = sinceResult.date ? { lastUpdated: { $gt: sinceResult.date } } : {};
       const matchStats = await MatchStats.find(filter);
-      sendJson(req, res, 200, { ok: true, matchStats, serverTime: new Date().toISOString() });
+      sendJson(req, res, 200, { ok: true, matchStats, serverTime });
     } catch (e) {
       sendJson(req, res, 500, { ok: false, error: 'Error al obtener estadísticas' });
     }
