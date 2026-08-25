@@ -14,6 +14,7 @@ import { scrapMatchStats } from './scripts/matchStats.js';
 import { authenticate, rateLimiter, checkBodySize, setSecurityHeaders, validateUsername, authRateLimiter } from './api/middleware.js';
 import { getFinalPredictionsViolations } from './api/finalPredictions.js';
 import { validateFasesFechas } from './api/fasesFechas.js';
+import { computeWeakEtag, etagMatches } from './api/etag.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -263,6 +264,15 @@ function sendJson(req, res, statusCode, data, cacheSeconds) {
   const baseHeaders = { 'Content-Type': 'application/json; charset=utf-8' };
   if (cacheSeconds) {
     baseHeaders['Cache-Control'] = `public, max-age=${cacheSeconds}, stale-while-revalidate=${cacheSeconds * 2}`;
+  }
+  if (statusCode === 200 && req?.method === 'GET') {
+    const etag = computeWeakEtag(json);
+    baseHeaders['ETag'] = etag;
+    if (etagMatches(req.headers['if-none-match'], etag)) {
+      res.writeHead(304, baseHeaders);
+      res.end();
+      return;
+    }
   }
   const acceptEncoding = req?.headers?.['accept-encoding'] || '';
   if (acceptEncoding.includes('gzip') && json.length > 1024) {
