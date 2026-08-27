@@ -14,7 +14,7 @@ const CREST_SIZE = 14;
 const LINE_HEIGHT = 16;
 const COL_GAP = 10;
 
-export function drawBracket(doc, finalPredictions, teamsMap, y) {
+export async function drawBracket(doc, finalPredictions, teamsMap, y) {
   y = drawSectionTitle(doc, 'ELIMINATORIAS', y);
 
   const colWidth = Math.floor((CONTENT_WIDTH - (ROUNDS.length - 1) * COL_GAP) / ROUNDS.length);
@@ -46,7 +46,7 @@ export function drawBracket(doc, finalPredictions, teamsMap, y) {
       const teamId = teams[t];
 
       if (teamId) {
-        drawTeamCrest(doc, teamId, x + 2, teamY, CREST_SIZE);
+        await drawTeamCrest(doc, teamId, x + 2, teamY, CREST_SIZE);
         const teamName = abreviarNombre(teamsMap[teamId] || String(teamId));
         doc.save();
         doc.fontSize(6).fillColor(COLORS.text);

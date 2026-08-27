@@ -5,8 +5,8 @@ import { drawPredictions } from './predictions.js';
 import { drawBracket } from './bracket.js';
 import { drawPlantilla } from './plantilla.js';
 
-export function generatePDF(users, matchesByRound, teamsMap) {
-  return new Promise((resolve, reject) => {
+export async function generatePDF(users, matchesByRound, teamsMap) {
+  return new Promise(async (resolve, reject) => {
     const doc = new PDFDocument({
       size: 'A4',
       margins: { top: MARGIN, bottom: MARGIN, left: MARGIN, right: MARGIN },
@@ -30,8 +30,8 @@ export function generatePDF(users, matchesByRound, teamsMap) {
 
       y = drawPlayerHeader(doc, user, y);
       y = drawPredictions(doc, matchesByRound, user.predictions || {}, teamsMap, y);
-      y = drawBracket(doc, user.finalPredictions, teamsMap, y);
-      y = drawPlantilla(doc, user.squad, y);
+      y = await drawBracket(doc, user.finalPredictions, teamsMap, y);
+      y = await drawPlantilla(doc, user.squad, y);
     }
 
     doc.end();

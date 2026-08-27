@@ -12,7 +12,7 @@ const PHOTO_SIZE = 12;
 const LINE_HEIGHT = 14;
 const COL_GAP = 5;
 
-export function drawPlantilla(doc, squad, y) {
+export async function drawPlantilla(doc, squad, y) {
   y = drawSectionTitle(doc, 'PLANTILLA IDEAL', y);
 
   const totalWidth = POSITIONS.reduce((sum, p) => sum + p.width, 0) + (POSITIONS.length - 1) * COL_GAP;
@@ -33,7 +33,7 @@ export function drawPlantilla(doc, squad, y) {
       const player = players[i];
 
       if (player) {
-        drawPlayerPhoto(doc, player.id, colX + 2, playerY + 1, PHOTO_SIZE);
+        await drawPlayerPhoto(doc, player.id, colX + 2, playerY + 1, PHOTO_SIZE);
         doc.save();
         doc.fontSize(6).fillColor(COLORS.text);
         const name = abreviarNombre(player.nombre);

@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
+import sharp from 'sharp';
 
 const BASE_DIR = process.cwd();
 
@@ -42,11 +43,12 @@ export function drawPlaceholder(doc, x, y, size, text) {
   doc.restore();
 }
 
-export function drawTeamCrest(doc, teamId, x, y, size = 14) {
+export async function drawTeamCrest(doc, teamId, x, y, size = 14) {
   const buffer = loadImageSafe(`data/sofascore/imgEquipos/${teamId}.webp`);
   if (buffer) {
     try {
-      doc.image(buffer, x, y, { width: size, height: size });
+      const pngBuffer = await sharp(buffer).png().toBuffer();
+      doc.image(pngBuffer, x, y, { width: size, height: size });
     } catch {
       drawPlaceholder(doc, x, y, size, String(teamId));
     }
@@ -55,11 +57,12 @@ export function drawTeamCrest(doc, teamId, x, y, size = 14) {
   }
 }
 
-export function drawPlayerPhoto(doc, playerId, x, y, size = 12) {
+export async function drawPlayerPhoto(doc, playerId, x, y, size = 12) {
   const buffer = loadImageSafe(`data/sofascore/imgJugadores/${playerId}.webp`);
   if (buffer) {
     try {
-      doc.image(buffer, x, y, { width: size, height: size });
+      const pngBuffer = await sharp(buffer).png().toBuffer();
+      doc.image(pngBuffer, x, y, { width: size, height: size });
     } catch {
       drawPlaceholder(doc, x, y, size, String(playerId));
     }
