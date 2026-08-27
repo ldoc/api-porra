@@ -28,7 +28,7 @@ export async function generatePDF(users, matchesByRound, teamsMap) {
       doc.addPage();
       let y = MARGIN;
 
-      y = await drawPlayerHeader(doc, user, y);
+      y = drawPlayerHeader(doc, user, y);
       y = drawPredictions(doc, matchesByRound, user.predictions || {}, teamsMap, y);
       y = await drawBracket(doc, user.finalPredictions, teamsMap, y);
       y = await drawPlantilla(doc, user.squad, y);
