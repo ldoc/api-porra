@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'fs';
+import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import sharp from 'sharp';
 
@@ -57,9 +57,27 @@ export async function drawTeamCrest(doc, teamId, x, y, size = 14) {
   }
 }
 
+const EMOJI_CACHE_DIR = join(BASE_DIR, 'data', 'emojis');
+
 export async function emojiToImage(emoji, size = 20) {
-  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${size}' height='${size}'><text x='0' y='${size * 0.8}' font-size='${size * 0.9}'>${emoji}</text></svg>`;
-  return await sharp(Buffer.from(svg)).png().toBuffer();
+  const cp = [...emoji].map(c => c.codePointAt(0).toString(16)).join('-');
+  const cacheFile = join(EMOJI_CACHE_DIR, `${cp}.png`);
+
+  if (existsSync(cacheFile)) {
+    return readFileSync(cacheFile);
+  }
+
+  const url = `https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/${cp}.png`;
+  const res = await fetch(url);
+  if (!res.ok) return null;
+
+  const buf = Buffer.from(await res.arrayBuffer());
+  const png = await sharp(buf).resize(size, size).png().toBuffer();
+
+  mkdirSync(EMOJI_CACHE_DIR, { recursive: true });
+  writeFileSync(cacheFile, png);
+
+  return png;
 }
 
 export async function drawPlayerPhoto(doc, playerId, x, y, size = 12) {
