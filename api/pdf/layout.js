@@ -25,14 +25,8 @@ export function drawSectionTitle(doc, title, y) {
 
 export function drawPlayerHeader(doc, user, y) {
   doc.save();
-  if (user.avatar) {
-    doc.fontSize(14).text(user.avatar, MARGIN, y);
-    doc.fontSize(10).font('Helvetica-Bold').fillColor(COLORS.title);
-    doc.text(user.username, MARGIN + 22, y + 2);
-  } else {
-    doc.fontSize(10).font('Helvetica-Bold').fillColor(COLORS.title);
-    doc.text(user.username, MARGIN, y);
-  }
+  doc.fontSize(10).font('Helvetica-Bold').fillColor(COLORS.title);
+  doc.text(user.username, MARGIN, y);
   doc.restore();
   doc.moveTo(MARGIN, y + 16).lineTo(MARGIN + CONTENT_WIDTH, y + 16).strokeColor(COLORS.separator).lineWidth(0.5).stroke();
   return y + 22;
