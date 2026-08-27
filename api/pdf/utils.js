@@ -57,6 +57,11 @@ export async function drawTeamCrest(doc, teamId, x, y, size = 14) {
   }
 }
 
+export async function emojiToImage(emoji, size = 20) {
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${size}' height='${size}'><text x='0' y='${size * 0.8}' font-size='${size * 0.9}'>${emoji}</text></svg>`;
+  return await sharp(Buffer.from(svg)).png().toBuffer();
+}
+
 export async function drawPlayerPhoto(doc, playerId, x, y, size = 12) {
   const buffer = loadImageSafe(`data/sofascore/imgJugadores/${playerId}.webp`);
   if (buffer) {

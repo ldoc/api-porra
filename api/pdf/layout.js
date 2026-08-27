@@ -1,3 +1,5 @@
+import { emojiToImage } from './utils.js';
+
 export const PAGE_WIDTH = 595;
 export const PAGE_HEIGHT = 842;
 export const MARGIN = 40;
@@ -23,10 +25,19 @@ export function drawSectionTitle(doc, title, y) {
   return y + 18;
 }
 
-export function drawPlayerHeader(doc, user, y) {
+export async function drawPlayerHeader(doc, user, y) {
   doc.save();
-  doc.fontSize(10).font('Helvetica-Bold').fillColor(COLORS.title);
-  doc.text(user.username, MARGIN, y);
+  if (user.avatar) {
+    try {
+      const emojiBuf = await emojiToImage(user.avatar, 16);
+      doc.image(emojiBuf, MARGIN, y, { width: 16, height: 16 });
+    } catch {}
+    doc.fontSize(10).font('Helvetica-Bold').fillColor(COLORS.title);
+    doc.text(user.username, MARGIN + 22, y + 2);
+  } else {
+    doc.fontSize(10).font('Helvetica-Bold').fillColor(COLORS.title);
+    doc.text(user.username, MARGIN, y);
+  }
   doc.restore();
   doc.moveTo(MARGIN, y + 16).lineTo(MARGIN + CONTENT_WIDTH, y + 16).strokeColor(COLORS.separator).lineWidth(0.5).stroke();
   return y + 22;
