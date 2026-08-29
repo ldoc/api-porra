@@ -649,7 +649,7 @@ const server = http.createServer(async (req, res) => {
   // Endpoint: Avatares ya cogidos por otros usuarios
   if (reqUrl.pathname === '/api/avatars/taken' && req.method === 'GET') {
     const taken = await getTakenAvatars();
-    sendJson(req, res, 200, { ok: true, taken }, 300);
+    sendJson(req, res, 200, { ok: true, taken }, 120);
     return;
   }
 
@@ -657,7 +657,7 @@ const server = http.createServer(async (req, res) => {
     const phaseCheck = await checkPhaseConsistency(req, res);
     if (!phaseCheck) return;
     const players = await getAllPlayers();
-    sendJson(req, res, 200, { ok: true, players }, 300);
+    sendJson(req, res, 200, { ok: true, players }, 120);
     return;
   }
 
