@@ -762,9 +762,17 @@ const server = http.createServer(async (req, res) => {
     // Validación: los 8 primeros clasificados de la clasificación pronosticada no pueden ir a deciseisavos
     const fp = body.finalPredictions;
     const userForValidation = await User.findOne({ username: auth.username });
-    const standings = userForValidation?.predictions
+    if (!userForValidation?.predictionsConfirmed) {
+      sendJson(req, res, 403, { ok: false, error: 'Debes confirmar tus pronósticos de liga antes de guardar el cuadro de eliminatorias' });
+      return;
+    }
+    const standings = userForValidation.predictions
       ? await calculateUserStandings(userForValidation.predictions)
       : [];
+    if (!standings || standings.length < 24) {
+      sendJson(req, res, 400, { ok: false, error: 'Debes completar los 144 pronósticos de liga antes de guardar el cuadro de eliminatorias' });
+      return;
+    }
     const teamPositionMap = new Map(standings.map((team, index) => [team.id, index + 1]));
 
     if (fp.roundOf32 && Array.isArray(fp.roundOf32) && fp.roundOf32.length > 0 && teamPositionMap.size >= 8) {
@@ -776,13 +784,11 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
-    // Validación: restricciones por grupos de posiciones
-    if (standings && standings.length >= 24) {
-      const violations = getFinalPredictionsViolations(fp, teamPositionMap);
-      if (violations.length > 0) {
-        sendJson(req, res, 400, { ok: false, error: violations[0] });
-        return;
-      }
+    // Validación: restricciones por grupos de posiciones (standings ya garantizado >= 24)
+    const violations = getFinalPredictionsViolations(fp, teamPositionMap);
+    if (violations.length > 0) {
+      sendJson(req, res, 400, { ok: false, error: violations[0] });
+      return;
     }
 
     const user = await User.findOne({ username: auth.username });
