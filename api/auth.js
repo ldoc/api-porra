@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { User } from '../db/index.js';
 import { Invitation } from '../db/index.js';
 import { validateSquadComposition } from './squadValidation.js';
+import { validateUsername } from './middleware.js';
 
 if (!process.env.JWT_SECRET) {
   throw new Error('JWT_SECRET no está definido en las variables de entorno');
@@ -30,9 +31,11 @@ export async function register(username, password, invitationCode, faseJuego) {
   if (!username || !password || !invitationCode) {
     return { ok: false, error: 'Usuario, contraseña y código de invitación son obligatorios' };
   }
-  if (username.length < 3) {
-    return { ok: false, error: 'El usuario debe tener al menos 3 caracteres' };
+  const usernameCheck = validateUsername(username);
+  if (!usernameCheck.ok) {
+    return { ok: false, error: usernameCheck.error };
   }
+  username = usernameCheck.username;
   if (password.length < 6) {
     return { ok: false, error: 'La contraseña debe tener al menos 6 caracteres' };
   }
