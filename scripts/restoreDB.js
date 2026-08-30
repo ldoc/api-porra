@@ -25,12 +25,33 @@ if (dbName) console.log(`Base de datos destino: ${dbName}`);
 
 await mongoose.connect(uri, dbName ? { dbName } : {});
 
+// JSON.stringify convierte ObjectId a string de 24 hex. Al restaurar hay que
+// devolverlos a ObjectId, si no Mongoose no encuentra los documentos al guardar
+// (DocumentNotFoundError por _id con tipo incorrecto).
+function restoreIds(value) {
+  if (Array.isArray(value)) {
+    return value.map(restoreIds);
+  }
+  if (value && typeof value === 'object') {
+    const out = {};
+    for (const [key, val] of Object.entries(value)) {
+      if (key === '_id' && typeof val === 'string' && /^[0-9a-fA-F]{24}$/.test(val)) {
+        out[key] = new mongoose.Types.ObjectId(val);
+      } else {
+        out[key] = restoreIds(val);
+      }
+    }
+    return out;
+  }
+  return value;
+}
+
 let totalDocs = 0;
 
 for (const file of files) {
   const collectionName = file.replace('.json', '');
-  const docs = JSON.parse(readFileSync(`${backupDir}/${file}`, 'utf8'));
-  
+  const docs = JSON.parse(readFileSync(`${backupDir}/${file}`, 'utf8')).map(restoreIds);
+
   if (docs.length === 0) {
     console.log(`  ${collectionName}: vacío, saltando`);
     continue;
@@ -39,7 +60,7 @@ for (const file of files) {
   const collection = mongoose.connection.db.collection(collectionName);
   await collection.deleteMany({});
   await collection.insertMany(docs);
-  
+
   console.log(`  ${collectionName}: ${docs.length} documentos restaurados`);
   totalDocs += docs.length;
 }
