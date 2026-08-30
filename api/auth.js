@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import { User } from '../db/index.js';
 import { Invitation } from '../db/index.js';
+import { validateSquadComposition } from './squadValidation.js';
 
 if (!process.env.JWT_SECRET) {
   throw new Error('JWT_SECRET no está definido en las variables de entorno');
@@ -179,19 +180,14 @@ export async function saveSquad(username, squad) {
     return { ok: false, error: 'Usuario requerido' };
   }
 
-  if (!Array.isArray(squad)) {
-    return { ok: false, error: 'squad debe ser un array' };
+  const composition = validateSquadComposition(squad);
+  if (!composition.ok) {
+    return { ok: false, error: composition.error };
   }
 
   const user = await User.findOne({ username: username.toLowerCase() });
   if (!user) {
     return { ok: false, error: 'Usuario no encontrado' };
-  }
-
-  const teams = squad.map(p => p.equipo);
-  const uniqueTeams = new Set(teams);
-  if (uniqueTeams.size !== teams.length) {
-    return { ok: false, error: 'No puede haber jugadores del mismo equipo repetidos' };
   }
 
   user.squad = squad;
