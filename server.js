@@ -947,6 +947,11 @@ const server = http.createServer(async (req, res) => {
       sendJson(req, res, 400, { ok: false, error: 'eventId inválido' });
       return;
     }
+    const admin = await verifyAdmin(req);
+    if (!admin) {
+      sendJson(req, res, 403, { ok: false, error: 'Acceso denegado. Se requieren permisos de administrador.' });
+      return;
+    }
     try {
       const result = await MatchStats.deleteOne({ eventId });
       if (result.deletedCount === 0) {
