@@ -1045,7 +1045,7 @@ const server = http.createServer(async (req, res) => {
     endpoints: {
       register: 'POST /api/auth/register',
       login: 'POST /api/auth/login',
-      getProfile: 'GET /api/auth/profile?username=xxxx',
+      getProfile: 'GET /api/auth/profile (token JWT)',
       saveProfile: 'POST /api/auth/profile',
       changePassword: 'POST /api/auth/change-password',
       config: 'GET /api/config',
