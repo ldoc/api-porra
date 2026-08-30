@@ -16,6 +16,7 @@ import { getFinalPredictionsViolations } from './api/finalPredictions.js';
 import { validateFasesFechas } from './api/fasesFechas.js';
 import { computeWeakEtag, etagMatches } from './api/etag.js';
 import { parseSinceParam } from './api/matchStatsFilter.js';
+import { calculateUserStandings } from './api/standings.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -28,130 +29,6 @@ const loginLimiter = rateLimiter({ windowMs: 15 * 60 * 1000, max: 10 });
 const registerLimiter = rateLimiter({ windowMs: 15 * 60 * 1000, max: 5 });
 const globalLimiter = rateLimiter({ windowMs: 60 * 1000, max: 120 });
 const authenticatedLimiter = authRateLimiter({ windowMs: 60 * 1000, max: 30 });
-
-/**
- * Calcula la clasificación pronosticada de un usuario basándose en sus predicciones
- * @param {Object} predictions - Objeto con predicciones { eventId: { home, away } }
- * @returns {Promise<Array>} Array ordenado de equipos con { id, position }
- */
-async function calculateUserStandings(predictions) {
-  try {
-    if (!predictions || Object.keys(predictions).length === 0) return [];
-
-    const calendar = await import('./data/sofascore/calendar.json', { assert: { type: 'json' } })
-      .then(m => m.default)
-      .catch(() => null);
-
-    if (!calendar) return [];
-
-    // Solo se consideran los 144 partidos de la fase de liga
-    const calendarLiga = calendar.filter(m => m.fase === 'liga');
-
-    const teamStats = {};
-
-    for (const match of calendarLiga) {
-      const pred = predictions[match.id];
-      if (!pred || pred.home === null || pred.away === null) continue;
-
-      const homeId = match.equipoLocal?.id ?? match.homeTeam?.id;
-      const awayId = match.equipoVisitante?.id ?? match.awayTeam?.id;
-      if (!homeId || !awayId) continue;
-
-      for (const tid of [homeId, awayId]) {
-        if (!teamStats[tid]) {
-          teamStats[tid] = {
-            teamId: tid,
-            points: 0,
-            gf: 0,
-            gc: 0,
-            gd: 0,
-            wins: 0,
-            draws: 0,
-            losses: 0,
-            awayGoals: 0,
-            awayWins: 0,
-            matches: [],
-            rivals: new Set()
-          };
-        }
-      }
-
-      const home = teamStats[homeId];
-      const away = teamStats[awayId];
-
-      home.rivals.add(awayId);
-      away.rivals.add(homeId);
-
-      home.matches.push({ goalsFor: pred.home, goalsAgainst: pred.away, isHome: true, rivalId: awayId });
-      away.matches.push({ goalsFor: pred.away, goalsAgainst: pred.home, isHome: false, rivalId: homeId });
-
-      home.gf += pred.home;
-      home.gc += pred.away;
-      away.gf += pred.away;
-      away.gc += pred.home;
-
-      home.gd = home.gf - home.gc;
-      away.gd = away.gf - away.gc;
-
-      if (pred.home > pred.away) {
-        home.wins++;
-        home.points += 3;
-        away.losses++;
-      } else if (pred.home < pred.away) {
-        away.wins++;
-        away.points += 3;
-        home.losses++;
-      } else {
-        home.draws++;
-        home.points++;
-        away.draws++;
-        away.points++;
-      }
-
-      away.awayGoals += pred.away;
-      if (pred.away > pred.home) away.awayWins++;
-    }
-
-    const teams = Object.values(teamStats);
-
-    for (const team of teams) {
-      let rivalPointsSum = 0;
-      let rivalGDSum = 0;
-      let rivalGFSum = 0;
-
-      for (const rivalId of team.rivals) {
-        const rival = teamStats[rivalId];
-        if (rival) {
-          rivalPointsSum += rival.points;
-          rivalGDSum += rival.gd;
-          rivalGFSum += rival.gf;
-        }
-      }
-
-      team.rivalPointsSum = rivalPointsSum;
-      team.rivalGDSum = rivalGDSum;
-      team.rivalGFSum = rivalGFSum;
-    }
-
-    teams.sort((a, b) => {
-      if (b.points !== a.points) return b.points - a.points;
-      if (b.gd !== a.gd) return b.gd - a.gd;
-      if (b.gf !== a.gf) return b.gf - a.gf;
-      if (b.awayGoals !== a.awayGoals) return b.awayGoals - a.awayGoals;
-      if (b.wins !== a.wins) return b.wins - a.wins;
-      if (b.awayWins !== a.awayWins) return b.awayWins - a.awayWins;
-      if (b.rivalPointsSum !== a.rivalPointsSum) return b.rivalPointsSum - a.rivalPointsSum;
-      if (b.rivalGDSum !== a.rivalGDSum) return b.rivalGDSum - a.rivalGDSum;
-      if (b.rivalGFSum !== a.rivalGFSum) return b.rivalGFSum - a.rivalGFSum;
-      return 0;
-    });
-
-    return teams.map((t, i) => ({ id: t.teamId, position: i + 1 }));
-  } catch (err) {
-    console.error('Error calculating user standings:', err);
-    return [];
-  }
-}
 
 async function getFaseJuego() {
   try {
