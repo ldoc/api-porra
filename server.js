@@ -612,6 +612,11 @@ const server = http.createServer(async (req, res) => {
     };
     const currentFase = faseMap[fase] || 'liga';
 
+    if (user.predictionsConfirmed && currentFase === 'liga') {
+      sendJson(req, res, 403, { ok: false, error: 'Tus pronósticos de liga ya están confirmados y no se pueden modificar' });
+      return;
+    }
+
     // Solo validar si no es fase pretemporada (en pretemporada se guardan predicciones de liga)
     if (fase !== 'FASE_PRETEMPORADA') {
       let calendar;
