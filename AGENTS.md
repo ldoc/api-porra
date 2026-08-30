@@ -501,7 +501,7 @@ const stats = await scrapMatchStats(eventId);
 ## Datos de Sofascore
 
 - **Torneo**: Unique tournament ID `7` (Champions League)
-- **Temporada**: Season ID `76953`
+- **Temporada**: Season ID `96518`
 - **API base**: `https://www.sofascore.com/api/v1/`
 - **Imágenes base**: `https://img.sofascore.com/api/v1/`
 

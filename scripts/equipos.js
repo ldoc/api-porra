@@ -2,7 +2,7 @@ import https from 'https';
 import fs from 'node:fs';
 import sharp from 'sharp';
 
-const url = 'https://www.sofascore.com/api/v1/unique-tournament/7/season/76953/standings/total';
+const url = 'https://www.sofascore.com/api/v1/unique-tournament/7/season/96518/standings/total';
 
 // Configurar ciphers específicos de Chrome para pasar el filtro de huella TLS
 const chromeCiphers = [
