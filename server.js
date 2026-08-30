@@ -821,14 +821,13 @@ const server = http.createServer(async (req, res) => {
     try {
       const fase = await getFaseJuego();
       const isPublic = fase !== 'FASE_PRETEMPORADA';
-      let query;
-      if (isPublic || !auth.ok) {
-        // Fase activa: todas. Sin auth: todas (fallback, aunque el frontend siempre envía token).
-        query = User.find({}, 'username squad');
-      } else {
-        // Pre-temporada con auth: solo el propio usuario
-        query = User.find({ username: auth.username }, 'username squad');
+      if (!isPublic && !auth.ok) {
+        sendJson(req, res, 401, { ok: false, error: 'Autenticación requerida durante la fase de edición' });
+        return;
       }
+      const query = isPublic
+        ? User.find({}, 'username squad')
+        : User.find({ username: auth.username }, 'username squad');
       const users = await query;
       const squads = {};
       for (const user of users) {
@@ -970,12 +969,13 @@ const server = http.createServer(async (req, res) => {
       const fase = await getFaseJuego();
       const isPublic = fase !== 'FASE_PRETEMPORADA';
       const hiddenFase = getHiddenFaseForOthers(fase);
-      let query;
-      if (isPublic || !auth.ok) {
-        query = User.find({}, 'username predictions finalPredictions squad');
-      } else {
-        query = User.find({ username: auth.username }, 'username predictions finalPredictions squad');
+      if ((!isPublic || hiddenFase) && !auth.ok) {
+        sendJson(req, res, 401, { ok: false, error: 'Autenticación requerida durante la fase de edición' });
+        return;
       }
+      const query = isPublic
+        ? User.find({}, 'username predictions finalPredictions squad')
+        : User.find({ username: auth.username }, 'username predictions finalPredictions squad');
       const users = await query;
 
       // Construir mapa eventId → fase para filtrar predicciones de la fase oculta
