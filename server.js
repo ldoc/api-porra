@@ -1080,6 +1080,7 @@ const server = http.createServer(async (req, res) => {
       config: 'GET /api/config',
       adminFaseJuego: 'PUT /api/admin/fase-juego (admin)',
       adminConfig: 'PUT /api/admin/config (admin)',
+      progress: 'GET /api/admin/progress (admin)',
       avatarsTaken: 'GET /api/avatars/taken',
       players: 'GET /api/players',
       getPredictions: 'GET /api/predictions?username=xxxx',

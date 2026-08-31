@@ -160,6 +160,7 @@ api-porra/
 | PUT    | `/api/admin/fase-juego`       | Cambiar la fase del juego (faseJuego)          |
 | PUT    | `/api/admin/config`           | Actualizar configuración completa (faseJuego, tournament) |
 | PUT    | `/api/admin/fases-fechas`     | Actualizar fechas de inicio/fin de las fases (fasesFechas) |
+| GET    | `/api/admin/progress`         | Progreso de jugadores (panel admin)            |
 
 > `GameConfig` guarda un campo `fasesFechas` (`Object`, default `{}`) con las fechas de inicio/fin de cada fase: `{ FASE_X: { inicio, fin } }`, donde cada fecha es un string ISO o `null` (desconocida). `PUT /api/admin/fases-fechas` valida que las claves sean fases válidas (de las 13 definidas en `data/fases.json`) y que `inicio < fin` (módulo `api/fasesFechas.js`). `GET /api/config` lo devuelve dentro de `config.fasesFechas`.
 
