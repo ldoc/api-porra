@@ -1,0 +1,2018 @@
+[
+  {
+    "ronda": 1,
+    "fase": "liga",
+    "id": 16939050,
+    "fecha": 1788885900,
+    "equipoLocal": {
+      "id": 3250,
+      "name": "AEK Athens"
+    },
+    "equipoVisitante": {
+      "id": 2058,
+      "name": "LASK"
+    }
+  },
+  {
+    "ronda": 1,
+    "fase": "liga",
+    "id": 16938841,
+    "fecha": 1788885900,
+    "equipoLocal": {
+      "id": 2888,
+      "name": "Club Brugge KV"
+    },
+    "equipoVisitante": {
+      "id": 40,
+      "name": "Aston Villa"
+    }
+  },
+  {
+    "ronda": 1,
+    "fase": "liga",
+    "id": 16938848,
+    "fecha": 1788894000,
+    "equipoLocal": {
+      "id": 2673,
+      "name": "Borussia Dortmund"
+    },
+    "equipoVisitante": {
+      "id": 2819,
+      "name": "Villarreal"
+    }
+  },
+  {
+    "ronda": 1,
+    "fase": "liga",
+    "id": 16938854,
+    "fecha": 1788894000,
+    "equipoLocal": {
+      "id": 3002,
+      "name": "FC Porto"
+    },
+    "equipoVisitante": {
+      "id": 17,
+      "name": "Manchester City"
+    }
+  },
+  {
+    "ronda": 1,
+    "fase": "liga",
+    "id": 16938991,
+    "fecha": 1788894000,
+    "equipoLocal": {
+      "id": 1643,
+      "name": "Lille"
+    },
+    "equipoVisitante": {
+      "id": 2816,
+      "name": "Real Betis"
+    }
+  },
+  {
+    "ronda": 1,
+    "fase": "liga",
+    "id": 16938768,
+    "fecha": 1788894000,
+    "equipoLocal": {
+      "id": 2829,
+      "name": "Real Madrid"
+    },
+    "equipoVisitante": {
+      "id": 2697,
+      "name": "Inter"
+    }
+  },
+  {
+    "ronda": 1,
+    "fase": "liga",
+    "id": 16938784,
+    "fecha": 1788972300,
+    "equipoLocal": {
+      "id": 2817,
+      "name": "FC Barcelona"
+    },
+    "equipoVisitante": {
+      "id": 2959,
+      "name": "Feyenoord"
+    }
+  },
+  {
+    "ronda": 1,
+    "fase": "liga",
+    "id": 16939028,
+    "fecha": 1788972300,
+    "equipoLocal": {
+      "id": 2677,
+      "name": "VfB Stuttgart"
+    },
+    "equipoVisitante": {
+      "id": 1164,
+      "name": "Viking FK"
+    }
+  },
+  {
+    "ronda": 1,
+    "fase": "liga",
+    "id": 16938798,
+    "fecha": 1788980400,
+    "equipoLocal": {
+      "id": 44,
+      "name": "Liverpool FC"
+    },
+    "equipoVisitante": {
+      "id": 2836,
+      "name": "Atlético Madrid"
+    }
+  },
+  {
+    "ronda": 1,
+    "fase": "liga",
+    "id": 16938796,
+    "fecha": 1788980400,
+    "equipoLocal": {
+      "id": 1644,
+      "name": "Paris Saint-Germain"
+    },
+    "equipoVisitante": {
+      "id": 2404,
+      "name": "ŠK Slovan Bratislava"
+    }
+  },
+  {
+    "ronda": 1,
+    "fase": "liga",
+    "id": 16938985,
+    "fecha": 1788980400,
+    "equipoLocal": {
+      "id": 2714,
+      "name": "SSC Napoli"
+    },
+    "equipoVisitante": {
+      "id": 42,
+      "name": "Arsenal"
+    }
+  },
+  {
+    "ronda": 1,
+    "fase": "liga",
+    "id": 16938888,
+    "fecha": 1788980400,
+    "equipoLocal": {
+      "id": 3001,
+      "name": "Sporting CP"
+    },
+    "equipoVisitante": {
+      "id": 3061,
+      "name": "Galatasaray"
+    }
+  },
+  {
+    "ronda": 1,
+    "fase": "liga",
+    "id": 16938963,
+    "fecha": 1789058700,
+    "equipoLocal": {
+      "id": 3052,
+      "name": "Fenerbahçe"
+    },
+    "equipoVisitante": {
+      "id": 2702,
+      "name": "AS Roma"
+    }
+  },
+  {
+    "ronda": 1,
+    "fase": "liga",
+    "id": 16938896,
+    "fecha": 1789058700,
+    "equipoLocal": {
+      "id": 2952,
+      "name": "PSV Eindhoven"
+    },
+    "equipoVisitante": {
+      "id": 3313,
+      "name": "Shakhtar Donetsk"
+    }
+  },
+  {
+    "ronda": 1,
+    "fase": "liga",
+    "id": 16939034,
+    "fecha": 1789066800,
+    "equipoLocal": {
+      "id": 2704,
+      "name": "Como"
+    },
+    "equipoVisitante": {
+      "id": 36360,
+      "name": "RB Leipzig"
+    }
+  },
+  {
+    "ronda": 1,
+    "fase": "liga",
+    "id": 16938858,
+    "fecha": 1789066800,
+    "equipoLocal": {
+      "id": 2672,
+      "name": "FC Bayern München"
+    },
+    "equipoVisitante": {
+      "id": 656,
+      "name": "Bodø/Glimt"
+    }
+  },
+  {
+    "ronda": 1,
+    "fase": "liga",
+    "id": 16938880,
+    "fecha": 1789066800,
+    "equipoLocal": {
+      "id": 35,
+      "name": "Manchester United"
+    },
+    "equipoVisitante": {
+      "id": 267828,
+      "name": "Sabah FK"
+    }
+  },
+  {
+    "ronda": 1,
+    "fase": "liga",
+    "id": 16939012,
+    "fecha": 1789066800,
+    "equipoLocal": {
+      "id": 2216,
+      "name": "SK Slavia Praha"
+    },
+    "equipoVisitante": {
+      "id": 1648,
+      "name": "RC Lens"
+    }
+  },
+  {
+    "ronda": 2,
+    "fase": "liga",
+    "id": 16939003,
+    "fecha": 1791909900,
+    "equipoLocal": {
+      "id": 1648,
+      "name": "RC Lens"
+    },
+    "equipoVisitante": {
+      "id": 3001,
+      "name": "Sporting CP"
+    }
+  },
+  {
+    "ronda": 2,
+    "fase": "liga",
+    "id": 16939017,
+    "fecha": 1791909900,
+    "equipoLocal": {
+      "id": 267828,
+      "name": "Sabah FK"
+    },
+    "equipoVisitante": {
+      "id": 2216,
+      "name": "SK Slavia Praha"
+    }
+  },
+  {
+    "ronda": 2,
+    "fase": "liga",
+    "id": 16938807,
+    "fecha": 1791918000,
+    "equipoLocal": {
+      "id": 42,
+      "name": "Arsenal"
+    },
+    "equipoVisitante": {
+      "id": 1643,
+      "name": "Lille"
+    }
+  },
+  {
+    "ronda": 2,
+    "fase": "liga",
+    "id": 16938789,
+    "fecha": 1791918000,
+    "equipoLocal": {
+      "id": 2836,
+      "name": "Atlético Madrid"
+    },
+    "equipoVisitante": {
+      "id": 35,
+      "name": "Manchester United"
+    }
+  },
+  {
+    "ronda": 2,
+    "fase": "liga",
+    "id": 16938979,
+    "fecha": 1791918000,
+    "equipoLocal": {
+      "id": 3061,
+      "name": "Galatasaray"
+    },
+    "equipoVisitante": {
+      "id": 2817,
+      "name": "FC Barcelona"
+    }
+  },
+  {
+    "ronda": 2,
+    "fase": "liga",
+    "id": 16938777,
+    "fecha": 1791918000,
+    "equipoLocal": {
+      "id": 2697,
+      "name": "Inter"
+    },
+    "equipoVisitante": {
+      "id": 2888,
+      "name": "Club Brugge KV"
+    }
+  },
+  {
+    "ronda": 2,
+    "fase": "liga",
+    "id": 16938939,
+    "fecha": 1791918000,
+    "equipoLocal": {
+      "id": 36360,
+      "name": "RB Leipzig"
+    },
+    "equipoVisitante": {
+      "id": 2952,
+      "name": "PSV Eindhoven"
+    }
+  },
+  {
+    "ronda": 2,
+    "fase": "liga",
+    "id": 16939021,
+    "fecha": 1791918000,
+    "equipoLocal": {
+      "id": 1164,
+      "name": "Viking FK"
+    },
+    "equipoVisitante": {
+      "id": 2672,
+      "name": "FC Bayern München"
+    }
+  },
+  {
+    "ronda": 2,
+    "fase": "liga",
+    "id": 16938924,
+    "fecha": 1791918000,
+    "equipoLocal": {
+      "id": 2819,
+      "name": "Villarreal"
+    },
+    "equipoVisitante": {
+      "id": 2714,
+      "name": "SSC Napoli"
+    }
+  },
+  {
+    "ronda": 2,
+    "fase": "liga",
+    "id": 16938974,
+    "fecha": 1791996300,
+    "equipoLocal": {
+      "id": 2959,
+      "name": "Feyenoord"
+    },
+    "equipoVisitante": {
+      "id": 2704,
+      "name": "Como"
+    }
+  },
+  {
+    "ronda": 2,
+    "fase": "liga",
+    "id": 16939043,
+    "fecha": 1791996300,
+    "equipoLocal": {
+      "id": 2058,
+      "name": "LASK"
+    },
+    "equipoVisitante": {
+      "id": 44,
+      "name": "Liverpool FC"
+    }
+  },
+  {
+    "ronda": 2,
+    "fase": "liga",
+    "id": 16938872,
+    "fecha": 1792004400,
+    "equipoLocal": {
+      "id": 2702,
+      "name": "AS Roma"
+    },
+    "equipoVisitante": {
+      "id": 2829,
+      "name": "Real Madrid"
+    }
+  },
+  {
+    "ronda": 2,
+    "fase": "liga",
+    "id": 16938852,
+    "fecha": 1792004400,
+    "equipoLocal": {
+      "id": 40,
+      "name": "Aston Villa"
+    },
+    "equipoVisitante": {
+      "id": 3052,
+      "name": "Fenerbahçe"
+    }
+  },
+  {
+    "ronda": 2,
+    "fase": "liga",
+    "id": 16938931,
+    "fecha": 1792004400,
+    "equipoLocal": {
+      "id": 656,
+      "name": "Bodø/Glimt"
+    },
+    "equipoVisitante": {
+      "id": 2673,
+      "name": "Borussia Dortmund"
+    }
+  },
+  {
+    "ronda": 2,
+    "fase": "liga",
+    "id": 16938772,
+    "fecha": 1792004400,
+    "equipoLocal": {
+      "id": 17,
+      "name": "Manchester City"
+    },
+    "equipoVisitante": {
+      "id": 1644,
+      "name": "Paris Saint-Germain"
+    }
+  },
+  {
+    "ronda": 2,
+    "fase": "liga",
+    "id": 16938869,
+    "fecha": 1792004400,
+    "equipoLocal": {
+      "id": 2816,
+      "name": "Real Betis"
+    },
+    "equipoVisitante": {
+      "id": 3002,
+      "name": "FC Porto"
+    }
+  },
+  {
+    "ronda": 2,
+    "fase": "liga",
+    "id": 16938918,
+    "fecha": 1792004400,
+    "equipoLocal": {
+      "id": 3313,
+      "name": "Shakhtar Donetsk"
+    },
+    "equipoVisitante": {
+      "id": 3250,
+      "name": "AEK Athens"
+    }
+  },
+  {
+    "ronda": 2,
+    "fase": "liga",
+    "id": 16939041,
+    "fecha": 1792004400,
+    "equipoLocal": {
+      "id": 2404,
+      "name": "ŠK Slovan Bratislava"
+    },
+    "equipoVisitante": {
+      "id": 2677,
+      "name": "VfB Stuttgart"
+    }
+  },
+  {
+    "ronda": 3,
+    "fase": "liga",
+    "id": 16938965,
+    "fecha": 1792514700,
+    "equipoLocal": {
+      "id": 3052,
+      "name": "Fenerbahçe"
+    },
+    "equipoVisitante": {
+      "id": 2216,
+      "name": "SK Slavia Praha"
+    }
+  },
+  {
+    "ronda": 3,
+    "fase": "liga",
+    "id": 16939015,
+    "fecha": 1792514700,
+    "equipoLocal": {
+      "id": 267828,
+      "name": "Sabah FK"
+    },
+    "equipoVisitante": {
+      "id": 2673,
+      "name": "Borussia Dortmund"
+    }
+  },
+  {
+    "ronda": 3,
+    "fase": "liga",
+    "id": 16938875,
+    "fecha": 1792522800,
+    "equipoLocal": {
+      "id": 2702,
+      "name": "AS Roma"
+    },
+    "equipoVisitante": {
+      "id": 2404,
+      "name": "ŠK Slovan Bratislava"
+    }
+  },
+  {
+    "ronda": 3,
+    "fase": "liga",
+    "id": 16938855,
+    "fecha": 1792522800,
+    "equipoLocal": {
+      "id": 3002,
+      "name": "FC Porto"
+    },
+    "equipoVisitante": {
+      "id": 2952,
+      "name": "PSV Eindhoven"
+    }
+  },
+  {
+    "ronda": 3,
+    "fase": "liga",
+    "id": 16938800,
+    "fecha": 1792522800,
+    "equipoLocal": {
+      "id": 44,
+      "name": "Liverpool FC"
+    },
+    "equipoVisitante": {
+      "id": 2819,
+      "name": "Villarreal"
+    }
+  },
+  {
+    "ronda": 3,
+    "fase": "liga",
+    "id": 16938775,
+    "fecha": 1792522800,
+    "equipoLocal": {
+      "id": 17,
+      "name": "Manchester City"
+    },
+    "equipoVisitante": {
+      "id": 3250,
+      "name": "AEK Athens"
+    }
+  },
+  {
+    "ronda": 3,
+    "fase": "liga",
+    "id": 16938793,
+    "fecha": 1792522800,
+    "equipoLocal": {
+      "id": 1644,
+      "name": "Paris Saint-Germain"
+    },
+    "equipoVisitante": {
+      "id": 2817,
+      "name": "FC Barcelona"
+    }
+  },
+  {
+    "ronda": 3,
+    "fase": "liga",
+    "id": 16938987,
+    "fecha": 1792522800,
+    "equipoLocal": {
+      "id": 2714,
+      "name": "SSC Napoli"
+    },
+    "equipoVisitante": {
+      "id": 656,
+      "name": "Bodø/Glimt"
+    }
+  },
+  {
+    "ronda": 3,
+    "fase": "liga",
+    "id": 16939025,
+    "fecha": 1792522800,
+    "equipoLocal": {
+      "id": 2677,
+      "name": "VfB Stuttgart"
+    },
+    "equipoVisitante": {
+      "id": 2836,
+      "name": "Atlético Madrid"
+    }
+  },
+  {
+    "ronda": 3,
+    "fase": "liga",
+    "id": 16939033,
+    "fecha": 1792601100,
+    "equipoLocal": {
+      "id": 2704,
+      "name": "Como"
+    },
+    "equipoVisitante": {
+      "id": 35,
+      "name": "Manchester United"
+    }
+  },
+  {
+    "ronda": 3,
+    "fase": "liga",
+    "id": 16938992,
+    "fecha": 1792601100,
+    "equipoLocal": {
+      "id": 1643,
+      "name": "Lille"
+    },
+    "equipoVisitante": {
+      "id": 3061,
+      "name": "Galatasaray"
+    }
+  },
+  {
+    "ronda": 3,
+    "fase": "liga",
+    "id": 16938853,
+    "fecha": 1792609200,
+    "equipoLocal": {
+      "id": 40,
+      "name": "Aston Villa"
+    },
+    "equipoVisitante": {
+      "id": 1164,
+      "name": "Viking FK"
+    }
+  },
+  {
+    "ronda": 3,
+    "fase": "liga",
+    "id": 16938843,
+    "fecha": 1792609200,
+    "equipoLocal": {
+      "id": 2888,
+      "name": "Club Brugge KV"
+    },
+    "equipoVisitante": {
+      "id": 1648,
+      "name": "RC Lens"
+    }
+  },
+  {
+    "ronda": 3,
+    "fase": "liga",
+    "id": 16938859,
+    "fecha": 1792609200,
+    "equipoLocal": {
+      "id": 2672,
+      "name": "FC Bayern München"
+    },
+    "equipoVisitante": {
+      "id": 42,
+      "name": "Arsenal"
+    }
+  },
+  {
+    "ronda": 3,
+    "fase": "liga",
+    "id": 16938778,
+    "fecha": 1792609200,
+    "equipoLocal": {
+      "id": 2697,
+      "name": "Inter"
+    },
+    "equipoVisitante": {
+      "id": 3313,
+      "name": "Shakhtar Donetsk"
+    }
+  },
+  {
+    "ronda": 3,
+    "fase": "liga",
+    "id": 16938870,
+    "fecha": 1792609200,
+    "equipoLocal": {
+      "id": 2816,
+      "name": "Real Betis"
+    },
+    "equipoVisitante": {
+      "id": 2959,
+      "name": "Feyenoord"
+    }
+  },
+  {
+    "ronda": 3,
+    "fase": "liga",
+    "id": 16938770,
+    "fecha": 1792609200,
+    "equipoLocal": {
+      "id": 2829,
+      "name": "Real Madrid"
+    },
+    "equipoVisitante": {
+      "id": 36360,
+      "name": "RB Leipzig"
+    }
+  },
+  {
+    "ronda": 3,
+    "fase": "liga",
+    "id": 16938889,
+    "fecha": 1792609200,
+    "equipoLocal": {
+      "id": 3001,
+      "name": "Sporting CP"
+    },
+    "equipoVisitante": {
+      "id": 2058,
+      "name": "LASK"
+    }
+  },
+  {
+    "ronda": 4,
+    "fase": "liga",
+    "id": 16938982,
+    "fecha": 1793727900,
+    "equipoLocal": {
+      "id": 3061,
+      "name": "Galatasaray"
+    },
+    "equipoVisitante": {
+      "id": 2677,
+      "name": "VfB Stuttgart"
+    }
+  },
+  {
+    "ronda": 4,
+    "fase": "liga",
+    "id": 16938916,
+    "fecha": 1793727900,
+    "equipoLocal": {
+      "id": 3313,
+      "name": "Shakhtar Donetsk"
+    },
+    "equipoVisitante": {
+      "id": 3001,
+      "name": "Sporting CP"
+    }
+  },
+  {
+    "ronda": 4,
+    "fase": "liga",
+    "id": 16938788,
+    "fecha": 1793736000,
+    "equipoLocal": {
+      "id": 2836,
+      "name": "Atlético Madrid"
+    },
+    "equipoVisitante": {
+      "id": 2672,
+      "name": "FC Bayern München"
+    }
+  },
+  {
+    "ronda": 4,
+    "fase": "liga",
+    "id": 16938932,
+    "fecha": 1793736000,
+    "equipoLocal": {
+      "id": 656,
+      "name": "Bodø/Glimt"
+    },
+    "equipoVisitante": {
+      "id": 1643,
+      "name": "Lille"
+    }
+  },
+  {
+    "ronda": 4,
+    "fase": "liga",
+    "id": 16938783,
+    "fecha": 1793736000,
+    "equipoLocal": {
+      "id": 2817,
+      "name": "FC Barcelona"
+    },
+    "equipoVisitante": {
+      "id": 40,
+      "name": "Aston Villa"
+    }
+  },
+  {
+    "ronda": 4,
+    "fase": "liga",
+    "id": 16938971,
+    "fecha": 1793736000,
+    "equipoLocal": {
+      "id": 2959,
+      "name": "Feyenoord"
+    },
+    "equipoVisitante": {
+      "id": 2697,
+      "name": "Inter"
+    }
+  },
+  {
+    "ronda": 4,
+    "fase": "liga",
+    "id": 16939046,
+    "fecha": 1793736000,
+    "equipoLocal": {
+      "id": 2058,
+      "name": "LASK"
+    },
+    "equipoVisitante": {
+      "id": 2404,
+      "name": "ŠK Slovan Bratislava"
+    }
+  },
+  {
+    "ronda": 4,
+    "fase": "liga",
+    "id": 16938878,
+    "fecha": 1793736000,
+    "equipoLocal": {
+      "id": 35,
+      "name": "Manchester United"
+    },
+    "equipoVisitante": {
+      "id": 2702,
+      "name": "AS Roma"
+    }
+  },
+  {
+    "ronda": 4,
+    "fase": "liga",
+    "id": 16938922,
+    "fecha": 1793736000,
+    "equipoLocal": {
+      "id": 2819,
+      "name": "Villarreal"
+    },
+    "equipoVisitante": {
+      "id": 1644,
+      "name": "Paris Saint-Germain"
+    }
+  },
+  {
+    "ronda": 4,
+    "fase": "liga",
+    "id": 16939047,
+    "fecha": 1793814300,
+    "equipoLocal": {
+      "id": 3250,
+      "name": "AEK Athens"
+    },
+    "equipoVisitante": {
+      "id": 2829,
+      "name": "Real Madrid"
+    }
+  },
+  {
+    "ronda": 4,
+    "fase": "liga",
+    "id": 16938962,
+    "fecha": 1793814300,
+    "equipoLocal": {
+      "id": 3052,
+      "name": "Fenerbahçe"
+    },
+    "equipoVisitante": {
+      "id": 44,
+      "name": "Liverpool FC"
+    }
+  },
+  {
+    "ronda": 4,
+    "fase": "liga",
+    "id": 16938847,
+    "fecha": 1793822400,
+    "equipoLocal": {
+      "id": 2673,
+      "name": "Borussia Dortmund"
+    },
+    "equipoVisitante": {
+      "id": 2816,
+      "name": "Real Betis"
+    }
+  },
+  {
+    "ronda": 4,
+    "fase": "liga",
+    "id": 16938856,
+    "fecha": 1793822400,
+    "equipoLocal": {
+      "id": 3002,
+      "name": "FC Porto"
+    },
+    "equipoVisitante": {
+      "id": 2714,
+      "name": "SSC Napoli"
+    }
+  },
+  {
+    "ronda": 4,
+    "fase": "liga",
+    "id": 16938895,
+    "fecha": 1793822400,
+    "equipoLocal": {
+      "id": 2952,
+      "name": "PSV Eindhoven"
+    },
+    "equipoVisitante": {
+      "id": 2888,
+      "name": "Club Brugge KV"
+    }
+  },
+  {
+    "ronda": 4,
+    "fase": "liga",
+    "id": 16938938,
+    "fecha": 1793822400,
+    "equipoLocal": {
+      "id": 36360,
+      "name": "RB Leipzig"
+    },
+    "equipoVisitante": {
+      "id": 17,
+      "name": "Manchester City"
+    }
+  },
+  {
+    "ronda": 4,
+    "fase": "liga",
+    "id": 16939005,
+    "fecha": 1793822400,
+    "equipoLocal": {
+      "id": 1648,
+      "name": "RC Lens"
+    },
+    "equipoVisitante": {
+      "id": 2704,
+      "name": "Como"
+    }
+  },
+  {
+    "ronda": 4,
+    "fase": "liga",
+    "id": 16939009,
+    "fecha": 1793822400,
+    "equipoLocal": {
+      "id": 2216,
+      "name": "SK Slavia Praha"
+    },
+    "equipoVisitante": {
+      "id": 42,
+      "name": "Arsenal"
+    }
+  },
+  {
+    "ronda": 4,
+    "fase": "liga",
+    "id": 16939024,
+    "fecha": 1793822400,
+    "equipoLocal": {
+      "id": 1164,
+      "name": "Viking FK"
+    },
+    "equipoVisitante": {
+      "id": 267828,
+      "name": "Sabah FK"
+    }
+  },
+  {
+    "ronda": 5,
+    "fase": "liga",
+    "id": 16938933,
+    "fecha": 1795542300,
+    "equipoLocal": {
+      "id": 656,
+      "name": "Bodø/Glimt"
+    },
+    "equipoVisitante": {
+      "id": 2058,
+      "name": "LASK"
+    }
+  },
+  {
+    "ronda": 5,
+    "fase": "liga",
+    "id": 16938980,
+    "fecha": 1795542300,
+    "equipoLocal": {
+      "id": 3061,
+      "name": "Galatasaray"
+    },
+    "equipoVisitante": {
+      "id": 40,
+      "name": "Aston Villa"
+    }
+  },
+  {
+    "ronda": 5,
+    "fase": "liga",
+    "id": 16938806,
+    "fecha": 1795550400,
+    "equipoLocal": {
+      "id": 42,
+      "name": "Arsenal"
+    },
+    "equipoVisitante": {
+      "id": 2673,
+      "name": "Borussia Dortmund"
+    }
+  },
+  {
+    "ronda": 5,
+    "fase": "liga",
+    "id": 16939035,
+    "fecha": 1795550400,
+    "equipoLocal": {
+      "id": 2704,
+      "name": "Como"
+    },
+    "equipoVisitante": {
+      "id": 3250,
+      "name": "AEK Athens"
+    }
+  },
+  {
+    "ronda": 5,
+    "fase": "liga",
+    "id": 16938972,
+    "fecha": 1795550400,
+    "equipoLocal": {
+      "id": 2959,
+      "name": "Feyenoord"
+    },
+    "equipoVisitante": {
+      "id": 3002,
+      "name": "FC Porto"
+    }
+  },
+  {
+    "ronda": 5,
+    "fase": "liga",
+    "id": 16938774,
+    "fecha": 1795550400,
+    "equipoLocal": {
+      "id": 17,
+      "name": "Manchester City"
+    },
+    "equipoVisitante": {
+      "id": 2714,
+      "name": "SSC Napoli"
+    }
+  },
+  {
+    "ronda": 5,
+    "fase": "liga",
+    "id": 16938941,
+    "fecha": 1795550400,
+    "equipoLocal": {
+      "id": 36360,
+      "name": "RB Leipzig"
+    },
+    "equipoVisitante": {
+      "id": 1648,
+      "name": "RC Lens"
+    }
+  },
+  {
+    "ronda": 5,
+    "fase": "liga",
+    "id": 16938769,
+    "fecha": 1795550400,
+    "equipoLocal": {
+      "id": 2829,
+      "name": "Real Madrid"
+    },
+    "equipoVisitante": {
+      "id": 2952,
+      "name": "PSV Eindhoven"
+    }
+  },
+  {
+    "ronda": 5,
+    "fase": "liga",
+    "id": 16939039,
+    "fecha": 1795550400,
+    "equipoLocal": {
+      "id": 2404,
+      "name": "ŠK Slovan Bratislava"
+    },
+    "equipoVisitante": {
+      "id": 2816,
+      "name": "Real Betis"
+    }
+  },
+  {
+    "ronda": 5,
+    "fase": "liga",
+    "id": 16939011,
+    "fecha": 1795628700,
+    "equipoLocal": {
+      "id": 2216,
+      "name": "SK Slavia Praha"
+    },
+    "equipoVisitante": {
+      "id": 2819,
+      "name": "Villarreal"
+    }
+  },
+  {
+    "ronda": 5,
+    "fase": "liga",
+    "id": 16939014,
+    "fecha": 1795628700,
+    "equipoLocal": {
+      "id": 267828,
+      "name": "Sabah FK"
+    },
+    "equipoVisitante": {
+      "id": 2817,
+      "name": "FC Barcelona"
+    }
+  },
+  {
+    "ronda": 5,
+    "fase": "liga",
+    "id": 16938791,
+    "fecha": 1795636800,
+    "equipoLocal": {
+      "id": 2836,
+      "name": "Atlético Madrid"
+    },
+    "equipoVisitante": {
+      "id": 1164,
+      "name": "Viking FK"
+    }
+  },
+  {
+    "ronda": 5,
+    "fase": "liga",
+    "id": 16938840,
+    "fecha": 1795636800,
+    "equipoLocal": {
+      "id": 2888,
+      "name": "Club Brugge KV"
+    },
+    "equipoVisitante": {
+      "id": 44,
+      "name": "Liverpool FC"
+    }
+  },
+  {
+    "ronda": 5,
+    "fase": "liga",
+    "id": 16938779,
+    "fecha": 1795636800,
+    "equipoLocal": {
+      "id": 2697,
+      "name": "Inter"
+    },
+    "equipoVisitante": {
+      "id": 2677,
+      "name": "VfB Stuttgart"
+    }
+  },
+  {
+    "ronda": 5,
+    "fase": "liga",
+    "id": 16938990,
+    "fecha": 1795636800,
+    "equipoLocal": {
+      "id": 1643,
+      "name": "Lille"
+    },
+    "equipoVisitante": {
+      "id": 2672,
+      "name": "FC Bayern München"
+    }
+  },
+  {
+    "ronda": 5,
+    "fase": "liga",
+    "id": 16938794,
+    "fecha": 1795636800,
+    "equipoLocal": {
+      "id": 1644,
+      "name": "Paris Saint-Germain"
+    },
+    "equipoVisitante": {
+      "id": 2702,
+      "name": "AS Roma"
+    }
+  },
+  {
+    "ronda": 5,
+    "fase": "liga",
+    "id": 16938917,
+    "fecha": 1795636800,
+    "equipoLocal": {
+      "id": 3313,
+      "name": "Shakhtar Donetsk"
+    },
+    "equipoVisitante": {
+      "id": 3052,
+      "name": "Fenerbahçe"
+    }
+  },
+  {
+    "ronda": 5,
+    "fase": "liga",
+    "id": 16938887,
+    "fecha": 1795636800,
+    "equipoLocal": {
+      "id": 3001,
+      "name": "Sporting CP"
+    },
+    "equipoVisitante": {
+      "id": 35,
+      "name": "Manchester United"
+    }
+  },
+  {
+    "ronda": 6,
+    "fase": "liga",
+    "id": 16939023,
+    "fecha": 1796751900,
+    "equipoLocal": {
+      "id": 1164,
+      "name": "Viking FK"
+    },
+    "equipoVisitante": {
+      "id": 2959,
+      "name": "Feyenoord"
+    }
+  },
+  {
+    "ronda": 6,
+    "fase": "liga",
+    "id": 16938925,
+    "fecha": 1796751900,
+    "equipoLocal": {
+      "id": 2819,
+      "name": "Villarreal"
+    },
+    "equipoVisitante": {
+      "id": 267828,
+      "name": "Sabah FK"
+    }
+  },
+  {
+    "ronda": 6,
+    "fase": "liga",
+    "id": 16939049,
+    "fecha": 1796760000,
+    "equipoLocal": {
+      "id": 3250,
+      "name": "AEK Athens"
+    },
+    "equipoVisitante": {
+      "id": 3061,
+      "name": "Galatasaray"
+    }
+  },
+  {
+    "ronda": 6,
+    "fase": "liga",
+    "id": 16938873,
+    "fecha": 1796760000,
+    "equipoLocal": {
+      "id": 2702,
+      "name": "AS Roma"
+    },
+    "equipoVisitante": {
+      "id": 3001,
+      "name": "Sporting CP"
+    }
+  },
+  {
+    "ronda": 6,
+    "fase": "liga",
+    "id": 16938850,
+    "fecha": 1796760000,
+    "equipoLocal": {
+      "id": 40,
+      "name": "Aston Villa"
+    },
+    "equipoVisitante": {
+      "id": 1644,
+      "name": "Paris Saint-Germain"
+    }
+  },
+  {
+    "ronda": 6,
+    "fase": "liga",
+    "id": 16938782,
+    "fecha": 1796760000,
+    "equipoLocal": {
+      "id": 2817,
+      "name": "FC Barcelona"
+    },
+    "equipoVisitante": {
+      "id": 17,
+      "name": "Manchester City"
+    }
+  },
+  {
+    "ronda": 6,
+    "fase": "liga",
+    "id": 16938861,
+    "fecha": 1796760000,
+    "equipoLocal": {
+      "id": 2672,
+      "name": "FC Bayern München"
+    },
+    "equipoVisitante": {
+      "id": 2216,
+      "name": "SK Slavia Praha"
+    }
+  },
+  {
+    "ronda": 6,
+    "fase": "liga",
+    "id": 16938879,
+    "fecha": 1796760000,
+    "equipoLocal": {
+      "id": 35,
+      "name": "Manchester United"
+    },
+    "equipoVisitante": {
+      "id": 36360,
+      "name": "RB Leipzig"
+    }
+  },
+  {
+    "ronda": 6,
+    "fase": "liga",
+    "id": 16938986,
+    "fecha": 1796760000,
+    "equipoLocal": {
+      "id": 2714,
+      "name": "SSC Napoli"
+    },
+    "equipoVisitante": {
+      "id": 2888,
+      "name": "Club Brugge KV"
+    }
+  },
+  {
+    "ronda": 6,
+    "fase": "liga",
+    "id": 16938871,
+    "fecha": 1796838300,
+    "equipoLocal": {
+      "id": 2816,
+      "name": "Real Betis"
+    },
+    "equipoVisitante": {
+      "id": 2704,
+      "name": "Como"
+    }
+  },
+  {
+    "ronda": 6,
+    "fase": "liga",
+    "id": 16939040,
+    "fecha": 1796838300,
+    "equipoLocal": {
+      "id": 2404,
+      "name": "ŠK Slovan Bratislava"
+    },
+    "equipoVisitante": {
+      "id": 3313,
+      "name": "Shakhtar Donetsk"
+    }
+  },
+  {
+    "ronda": 6,
+    "fase": "liga",
+    "id": 16938805,
+    "fecha": 1796846400,
+    "equipoLocal": {
+      "id": 42,
+      "name": "Arsenal"
+    },
+    "equipoVisitante": {
+      "id": 2829,
+      "name": "Real Madrid"
+    }
+  },
+  {
+    "ronda": 6,
+    "fase": "liga",
+    "id": 16938846,
+    "fecha": 1796846400,
+    "equipoLocal": {
+      "id": 2673,
+      "name": "Borussia Dortmund"
+    },
+    "equipoVisitante": {
+      "id": 2697,
+      "name": "Inter"
+    }
+  },
+  {
+    "ronda": 6,
+    "fase": "liga",
+    "id": 16939045,
+    "fecha": 1796846400,
+    "equipoLocal": {
+      "id": 2058,
+      "name": "LASK"
+    },
+    "equipoVisitante": {
+      "id": 3052,
+      "name": "Fenerbahçe"
+    }
+  },
+  {
+    "ronda": 6,
+    "fase": "liga",
+    "id": 16938799,
+    "fecha": 1796846400,
+    "equipoLocal": {
+      "id": 44,
+      "name": "Liverpool FC"
+    },
+    "equipoVisitante": {
+      "id": 3002,
+      "name": "FC Porto"
+    }
+  },
+  {
+    "ronda": 6,
+    "fase": "liga",
+    "id": 16938894,
+    "fecha": 1796846400,
+    "equipoLocal": {
+      "id": 2952,
+      "name": "PSV Eindhoven"
+    },
+    "equipoVisitante": {
+      "id": 2836,
+      "name": "Atlético Madrid"
+    }
+  },
+  {
+    "ronda": 6,
+    "fase": "liga",
+    "id": 16939004,
+    "fecha": 1796846400,
+    "equipoLocal": {
+      "id": 1648,
+      "name": "RC Lens"
+    },
+    "equipoVisitante": {
+      "id": 656,
+      "name": "Bodø/Glimt"
+    }
+  },
+  {
+    "ronda": 6,
+    "fase": "liga",
+    "id": 16939027,
+    "fecha": 1796846400,
+    "equipoLocal": {
+      "id": 2677,
+      "name": "VfB Stuttgart"
+    },
+    "equipoVisitante": {
+      "id": 1643,
+      "name": "Lille"
+    }
+  },
+  {
+    "ronda": 7,
+    "fase": "liga",
+    "id": 16938930,
+    "fecha": 1800380700,
+    "equipoLocal": {
+      "id": 656,
+      "name": "Bodø/Glimt"
+    },
+    "equipoVisitante": {
+      "id": 2836,
+      "name": "Atlético Madrid"
+    }
+  },
+  {
+    "ronda": 7,
+    "fase": "liga",
+    "id": 16938981,
+    "fecha": 1800380700,
+    "equipoLocal": {
+      "id": 3061,
+      "name": "Galatasaray"
+    },
+    "equipoVisitante": {
+      "id": 2959,
+      "name": "Feyenoord"
+    }
+  },
+  {
+    "ronda": 7,
+    "fase": "liga",
+    "id": 16939048,
+    "fecha": 1800388800,
+    "equipoLocal": {
+      "id": 3250,
+      "name": "AEK Athens"
+    },
+    "equipoVisitante": {
+      "id": 2702,
+      "name": "AS Roma"
+    }
+  },
+  {
+    "ronda": 7,
+    "fase": "liga",
+    "id": 16938851,
+    "fecha": 1800388800,
+    "equipoLocal": {
+      "id": 40,
+      "name": "Aston Villa"
+    },
+    "equipoVisitante": {
+      "id": 2673,
+      "name": "Borussia Dortmund"
+    }
+  },
+  {
+    "ronda": 7,
+    "fase": "liga",
+    "id": 16938857,
+    "fecha": 1800388800,
+    "equipoLocal": {
+      "id": 3002,
+      "name": "FC Porto"
+    },
+    "equipoVisitante": {
+      "id": 2216,
+      "name": "SK Slavia Praha"
+    }
+  },
+  {
+    "ronda": 7,
+    "fase": "liga",
+    "id": 16938776,
+    "fecha": 1800388800,
+    "equipoLocal": {
+      "id": 2697,
+      "name": "Inter"
+    },
+    "equipoVisitante": {
+      "id": 44,
+      "name": "Liverpool FC"
+    }
+  },
+  {
+    "ronda": 7,
+    "fase": "liga",
+    "id": 16938993,
+    "fecha": 1800388800,
+    "equipoLocal": {
+      "id": 1643,
+      "name": "Lille"
+    },
+    "equipoVisitante": {
+      "id": 2404,
+      "name": "ŠK Slovan Bratislava"
+    }
+  },
+  {
+    "ronda": 7,
+    "fase": "liga",
+    "id": 16938771,
+    "fecha": 1800388800,
+    "equipoLocal": {
+      "id": 2829,
+      "name": "Real Madrid"
+    },
+    "equipoVisitante": {
+      "id": 2058,
+      "name": "LASK"
+    }
+  },
+  {
+    "ronda": 7,
+    "fase": "liga",
+    "id": 16939026,
+    "fecha": 1800388800,
+    "equipoLocal": {
+      "id": 2677,
+      "name": "VfB Stuttgart"
+    },
+    "equipoVisitante": {
+      "id": 2888,
+      "name": "Club Brugge KV"
+    }
+  },
+  {
+    "ronda": 7,
+    "fase": "liga",
+    "id": 16938964,
+    "fecha": 1800467100,
+    "equipoLocal": {
+      "id": 3052,
+      "name": "Fenerbahçe"
+    },
+    "equipoVisitante": {
+      "id": 2819,
+      "name": "Villarreal"
+    }
+  },
+  {
+    "ronda": 7,
+    "fase": "liga",
+    "id": 16939016,
+    "fecha": 1800467100,
+    "equipoLocal": {
+      "id": 267828,
+      "name": "Sabah FK"
+    },
+    "equipoVisitante": {
+      "id": 2714,
+      "name": "SSC Napoli"
+    }
+  },
+  {
+    "ronda": 7,
+    "fase": "liga",
+    "id": 16939032,
+    "fecha": 1800475200,
+    "equipoLocal": {
+      "id": 2704,
+      "name": "Como"
+    },
+    "equipoVisitante": {
+      "id": 1644,
+      "name": "Paris Saint-Germain"
+    }
+  },
+  {
+    "ronda": 7,
+    "fase": "liga",
+    "id": 16938877,
+    "fecha": 1800475200,
+    "equipoLocal": {
+      "id": 35,
+      "name": "Manchester United"
+    },
+    "equipoVisitante": {
+      "id": 2672,
+      "name": "FC Bayern München"
+    }
+  },
+  {
+    "ronda": 7,
+    "fase": "liga",
+    "id": 16938940,
+    "fecha": 1800475200,
+    "equipoLocal": {
+      "id": 36360,
+      "name": "RB Leipzig"
+    },
+    "equipoVisitante": {
+      "id": 3313,
+      "name": "Shakhtar Donetsk"
+    }
+  },
+  {
+    "ronda": 7,
+    "fase": "liga",
+    "id": 16939002,
+    "fecha": 1800475200,
+    "equipoLocal": {
+      "id": 1648,
+      "name": "RC Lens"
+    },
+    "equipoVisitante": {
+      "id": 17,
+      "name": "Manchester City"
+    }
+  },
+  {
+    "ronda": 7,
+    "fase": "liga",
+    "id": 16938868,
+    "fecha": 1800475200,
+    "equipoLocal": {
+      "id": 2816,
+      "name": "Real Betis"
+    },
+    "equipoVisitante": {
+      "id": 42,
+      "name": "Arsenal"
+    }
+  },
+  {
+    "ronda": 7,
+    "fase": "liga",
+    "id": 16938886,
+    "fecha": 1800475200,
+    "equipoLocal": {
+      "id": 3001,
+      "name": "Sporting CP"
+    },
+    "equipoVisitante": {
+      "id": 2817,
+      "name": "FC Barcelona"
+    }
+  },
+  {
+    "ronda": 7,
+    "fase": "liga",
+    "id": 16939022,
+    "fecha": 1800475200,
+    "equipoLocal": {
+      "id": 1164,
+      "name": "Viking FK"
+    },
+    "equipoVisitante": {
+      "id": 2952,
+      "name": "PSV Eindhoven"
+    }
+  },
+  {
+    "ronda": 8,
+    "fase": "liga",
+    "id": 16938874,
+    "fecha": 1801080000,
+    "equipoLocal": {
+      "id": 2702,
+      "name": "AS Roma"
+    },
+    "equipoVisitante": {
+      "id": 1643,
+      "name": "Lille"
+    }
+  },
+  {
+    "ronda": 8,
+    "fase": "liga",
+    "id": 16938808,
+    "fecha": 1801080000,
+    "equipoLocal": {
+      "id": 42,
+      "name": "Arsenal"
+    },
+    "equipoVisitante": {
+      "id": 267828,
+      "name": "Sabah FK"
+    }
+  },
+  {
+    "ronda": 8,
+    "fase": "liga",
+    "id": 16938790,
+    "fecha": 1801080000,
+    "equipoLocal": {
+      "id": 2836,
+      "name": "Atlético Madrid"
+    },
+    "equipoVisitante": {
+      "id": 3052,
+      "name": "Fenerbahçe"
+    }
+  },
+  {
+    "ronda": 8,
+    "fase": "liga",
+    "id": 16938849,
+    "fecha": 1801080000,
+    "equipoLocal": {
+      "id": 2673,
+      "name": "Borussia Dortmund"
+    },
+    "equipoVisitante": {
+      "id": 3250,
+      "name": "AEK Athens"
+    }
+  },
+  {
+    "ronda": 8,
+    "fase": "liga",
+    "id": 16938842,
+    "fecha": 1801080000,
+    "equipoLocal": {
+      "id": 2888,
+      "name": "Club Brugge KV"
+    },
+    "equipoVisitante": {
+      "id": 656,
+      "name": "Bodø/Glimt"
+    }
+  },
+  {
+    "ronda": 8,
+    "fase": "liga",
+    "id": 16938785,
+    "fecha": 1801080000,
+    "equipoLocal": {
+      "id": 2817,
+      "name": "FC Barcelona"
+    },
+    "equipoVisitante": {
+      "id": 2704,
+      "name": "Como"
+    }
+  },
+  {
+    "ronda": 8,
+    "fase": "liga",
+    "id": 16938860,
+    "fecha": 1801080000,
+    "equipoLocal": {
+      "id": 2672,
+      "name": "FC Bayern München"
+    },
+    "equipoVisitante": {
+      "id": 2816,
+      "name": "Real Betis"
+    }
+  },
+  {
+    "ronda": 8,
+    "fase": "liga",
+    "id": 16938973,
+    "fecha": 1801080000,
+    "equipoLocal": {
+      "id": 2959,
+      "name": "Feyenoord"
+    },
+    "equipoVisitante": {
+      "id": 36360,
+      "name": "RB Leipzig"
+    }
+  },
+  {
+    "ronda": 8,
+    "fase": "liga",
+    "id": 16939044,
+    "fecha": 1801080000,
+    "equipoLocal": {
+      "id": 2058,
+      "name": "LASK"
+    },
+    "equipoVisitante": {
+      "id": 3002,
+      "name": "FC Porto"
+    }
+  },
+  {
+    "ronda": 8,
+    "fase": "liga",
+    "id": 16938801,
+    "fecha": 1801080000,
+    "equipoLocal": {
+      "id": 44,
+      "name": "Liverpool FC"
+    },
+    "equipoVisitante": {
+      "id": 1648,
+      "name": "RC Lens"
+    }
+  },
+  {
+    "ronda": 8,
+    "fase": "liga",
+    "id": 16938773,
+    "fecha": 1801080000,
+    "equipoLocal": {
+      "id": 17,
+      "name": "Manchester City"
+    },
+    "equipoVisitante": {
+      "id": 3001,
+      "name": "Sporting CP"
+    }
+  },
+  {
+    "ronda": 8,
+    "fase": "liga",
+    "id": 16938897,
+    "fecha": 1801080000,
+    "equipoLocal": {
+      "id": 2952,
+      "name": "PSV Eindhoven"
+    },
+    "equipoVisitante": {
+      "id": 2677,
+      "name": "VfB Stuttgart"
+    }
+  },
+  {
+    "ronda": 8,
+    "fase": "liga",
+    "id": 16938795,
+    "fecha": 1801080000,
+    "equipoLocal": {
+      "id": 1644,
+      "name": "Paris Saint-Germain"
+    },
+    "equipoVisitante": {
+      "id": 3061,
+      "name": "Galatasaray"
+    }
+  },
+  {
+    "ronda": 8,
+    "fase": "liga",
+    "id": 16939010,
+    "fecha": 1801080000,
+    "equipoLocal": {
+      "id": 2216,
+      "name": "SK Slavia Praha"
+    },
+    "equipoVisitante": {
+      "id": 40,
+      "name": "Aston Villa"
+    }
+  },
+  {
+    "ronda": 8,
+    "fase": "liga",
+    "id": 16938988,
+    "fecha": 1801080000,
+    "equipoLocal": {
+      "id": 2714,
+      "name": "SSC Napoli"
+    },
+    "equipoVisitante": {
+      "id": 1164,
+      "name": "Viking FK"
+    }
+  },
+  {
+    "ronda": 8,
+    "fase": "liga",
+    "id": 16938915,
+    "fecha": 1801080000,
+    "equipoLocal": {
+      "id": 3313,
+      "name": "Shakhtar Donetsk"
+    },
+    "equipoVisitante": {
+      "id": 2829,
+      "name": "Real Madrid"
+    }
+  },
+  {
+    "ronda": 8,
+    "fase": "liga",
+    "id": 16938923,
+    "fecha": 1801080000,
+    "equipoLocal": {
+      "id": 2819,
+      "name": "Villarreal"
+    },
+    "equipoVisitante": {
+      "id": 35,
+      "name": "Manchester United"
+    }
+  },
+  {
+    "ronda": 8,
+    "fase": "liga",
+    "id": 16939038,
+    "fecha": 1801080000,
+    "equipoLocal": {
+      "id": 2404,
+      "name": "ŠK Slovan Bratislava"
+    },
+    "equipoVisitante": {
+      "id": 2697,
+      "name": "Inter"
+    }
+  }
+]

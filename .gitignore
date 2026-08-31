@@ -1,6 +1,11 @@
 node_modules/
 data/*
 !data/fases.json
+# Ficheros de datos necesarios en runtime (clasificaciones/standings en backend)
+!data/sofascore/
+data/sofascore/*
+!data/sofascore/calendar.json
+!data/sofascore/teams.json
 .env
 opencode.json
 .opencode/

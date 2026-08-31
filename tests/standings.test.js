@@ -30,6 +30,19 @@ test('calculateUserStandings ordena por puntos y asigna posiciones', async () =>
   assert.strictEqual(standings.length, 2, 'solo cuentan los equipos con partido pronosticado');
 });
 
+test('con las 144 predicciones de liga completas se obtienen los 36 equipos (regresión PUT /api/final-predictions)', async () => {
+  const liga = loadCalendar().filter(m => m.fase === 'liga');
+  assert.strictEqual(liga.length, 144, 'el calendario debe tener 144 partidos de liga');
+  const predictions = {};
+  for (const m of liga) {
+    predictions[m.id] = { home: 1, away: 0 };
+  }
+  const standings = await calculateUserStandings(predictions);
+  assert.strictEqual(standings.length, 36, 'los 36 equipos deben tener posicion en la clasificación pronosticada');
+  const uniqueIds = new Set(standings.map(t => t.id));
+  assert.strictEqual(uniqueIds.size, 36, 'no debe haber equipos repetidos');
+});
+
 test('compareStandingsTeams: desempata alfabéticamente tras empate en los 9 criterios', () => {
   const nameMap = { 1: { name: 'Zeta FC' }, 2: { name: 'Alpha FC' } };
   const t = id => ({
