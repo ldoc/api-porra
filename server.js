@@ -7,13 +7,15 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import jwt from 'jsonwebtoken';
-import { connectDB, User, Invitation, MatchStats } from './db/index.js';
+import mongoose from 'mongoose';
+import { connectDB, User, Invitation, MatchStats, Message } from './db/index.js';
 import GameConfig from './db/models/GameConfig.js';
 import { register, login, getProfile, saveProfile, getTakenAvatars, getAllPlayers, getSquad, saveSquad, changePassword } from './api/auth.js';
 import { scrapMatchStats } from './scripts/matchStats.js';
 import { authenticate, rateLimiter, checkBodySize, setSecurityHeaders, validateUsername, authRateLimiter } from './api/middleware.js';
 import { getFinalPredictionsViolations } from './api/finalPredictions.js';
 import { validateFasesFechas } from './api/fasesFechas.js';
+import { validateMessage } from './api/messageValidation.js';
 import { computeWeakEtag, etagMatches } from './api/etag.js';
 import { parseSinceParam } from './api/matchStatsFilter.js';
 import { calculateUserStandings } from './api/standings.js';
@@ -559,6 +561,140 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // Endpoint: Listar mensajes (usuario autenticado). Devuelve todos con el flag read del usuario.
+  if (reqUrl.pathname === '/api/messages' && req.method === 'GET') {
+    const auth = authenticate(req);
+    if (!auth.ok) {
+      sendJson(req, res, auth.status, { ok: false, error: auth.error });
+      return;
+    }
+    try {
+      const messages = await Message.find({}).sort({ createdAt: -1, _id: -1 });
+      const result = messages.map(m => ({
+        id: m._id.toString(),
+        title: m.title,
+        content: m.content,
+        type: m.type,
+        fechaInicio: m.fechaInicio || null,
+        fechaFin: m.fechaFin || null,
+        createdAt: m.createdAt.toISOString(),
+        read: Array.isArray(m.readBy) && m.readBy.includes(auth.username)
+      }));
+      sendJson(req, res, 200, { ok: true, messages: result });
+    } catch (error) {
+      console.error('Error obteniendo mensajes:', error);
+      sendJson(req, res, 500, { ok: false, error: 'Error interno del servidor' });
+    }
+    return;
+  }
+
+  // Endpoint: Marcar mensaje como leído (usuario autenticado, idempotente)
+  if (reqUrl.pathname.startsWith('/api/messages/') && reqUrl.pathname.endsWith('/read') && req.method === 'POST') {
+    const auth = authenticate(req);
+    if (!auth.ok) {
+      sendJson(req, res, auth.status, { ok: false, error: auth.error });
+      return;
+    }
+    const id = reqUrl.pathname.split('/api/messages/')[1].replace(/\/read$/, '');
+    if (!mongoose.isValidObjectId(id)) {
+      sendJson(req, res, 400, { ok: false, error: 'ID de mensaje inválido' });
+      return;
+    }
+    try {
+      const message = await Message.findByIdAndUpdate(
+        id,
+        { $addToSet: { readBy: auth.username } },
+        { new: true }
+      );
+      if (!message) {
+        sendJson(req, res, 404, { ok: false, error: 'Mensaje no encontrado' });
+        return;
+      }
+      sendJson(req, res, 200, { ok: true, id: message._id.toString(), read: true });
+    } catch (error) {
+      console.error('Error marcando mensaje como leído:', error);
+      sendJson(req, res, 500, { ok: false, error: 'Error interno del servidor' });
+    }
+    return;
+  }
+
+  // Endpoint Admin: Crear mensaje
+  if (reqUrl.pathname === '/api/admin/messages' && req.method === 'POST') {
+    const admin = await verifyAdmin(req);
+    if (!admin) {
+      sendJson(req, res, 403, { ok: false, error: 'Acceso denegado. Se requieren permisos de administrador.' });
+      return;
+    }
+    const body = await parseBody(req);
+    if (!body || body.__error) {
+      const status = body?.__error?.status || 400;
+      sendJson(req, res, status, { ok: false, error: body?.__error?.error || 'Body inválido' });
+      return;
+    }
+    const valid = validateMessage({
+      title: body.title,
+      content: body.content,
+      type: body.type,
+      fechaInicio: body.fechaInicio,
+      fechaFin: body.fechaFin
+    });
+    if (!valid.ok) {
+      sendJson(req, res, 400, { ok: false, error: valid.error });
+      return;
+    }
+    try {
+      const message = await Message.create({
+        ...valid.message,
+        readBy: [],
+        createdBy: admin.username,
+        createdAt: new Date()
+      });
+      sendJson(req, res, 201, {
+        ok: true,
+        message: {
+          id: message._id.toString(),
+          title: message.title,
+          content: message.content,
+          type: message.type,
+          fechaInicio: message.fechaInicio || null,
+          fechaFin: message.fechaFin || null,
+          createdAt: message.createdAt.toISOString(),
+          read: false
+        }
+      });
+    } catch (error) {
+      console.error('Error creando mensaje:', error);
+      sendJson(req, res, 500, { ok: false, error: 'Error interno del servidor' });
+    }
+    return;
+  }
+
+  // Endpoint Admin: Borrar mensaje
+  if (reqUrl.pathname.startsWith('/api/admin/messages/') && req.method === 'DELETE') {
+    const admin = await verifyAdmin(req);
+    if (!admin) {
+      sendJson(req, res, 403, { ok: false, error: 'Acceso denegado. Se requieren permisos de administrador.' });
+      return;
+    }
+    const id = reqUrl.pathname.split('/api/admin/messages/')[1];
+    if (!mongoose.isValidObjectId(id)) {
+      sendJson(req, res, 400, { ok: false, error: 'ID de mensaje inválido' });
+      return;
+    }
+    try {
+      const message = await Message.findByIdAndDelete(id);
+      if (!message) {
+        sendJson(req, res, 404, { ok: false, error: 'Mensaje no encontrado' });
+        return;
+      }
+      sendJson(req, res, 200, { ok: true, deleted: id });
+    } catch (error) {
+      console.error('Error borrando mensaje:', error);
+      sendJson(req, res, 500, { ok: false, error: 'Error interno del servidor' });
+    }
+    return;
+  }
+
   if (reqUrl.pathname === '/api/players' && req.method === 'GET') {
     const phaseCheck = await checkPhaseConsistency(req, res);
     if (!phaseCheck) return;
@@ -1081,6 +1217,10 @@ const server = http.createServer(async (req, res) => {
       adminFaseJuego: 'PUT /api/admin/fase-juego (admin)',
       adminConfig: 'PUT /api/admin/config (admin)',
       progress: 'GET /api/admin/progress (admin)',
+      messages: 'GET /api/messages (auth)',
+      readMessage: 'POST /api/messages/:id/read (auth)',
+      createMessage: 'POST /api/admin/messages (admin)',
+      deleteMessage: 'DELETE /api/admin/messages/:id (admin)',
       avatarsTaken: 'GET /api/avatars/taken',
       players: 'GET /api/players',
       getPredictions: 'GET /api/predictions?username=xxxx',
