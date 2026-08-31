@@ -438,7 +438,10 @@ El proyecto usa MongoDB Atlas para persistir datos de usuarios, invitaciones y e
 | `JWT_SECRET`     | Secreto para firmar tokens JWT                 | `mi-secreto-seguro`             |
 | `FRONTEND_URL`   | URL del frontend para CORS                     | `https://porra-spa.vercel.app`  |
 | `PORT`           | Puerto del servidor (default: 3000)            | `3000`                          |
-| `MONGODB_URI`    | URI de conexión a MongoDB Atlas                | `mongodb+srv://...`             |
+| `MONGODB_URI`    | URI de conexión a MongoDB Atlas (suffix define DB) | `mongodb+srv://...@porra.ojhmbig.mongodb.net/test` (dev) / `.../prod` (Vercel prod) |
+| `MONGODB_URI` (local prod) | Para probar prod en local cambiar suffix a `/prod` | `mongodb+srv://...@porra.ojhmbig.mongodb.net/prod` |
+
+> **Entornos DB:** `test` = desarrollo/pruebas (local por defecto, `api-porra/.env.example`). `prod` = producción (Vercel env var `MONGODB_URI` termina en `/prod`). El suffix de la URI es la DB (`/test`→`test`, `/prod`→`prod`). Sin suffix Mongo usa `test` por defecto - **siempre explicitar**. Migración inicial `test→prod` via `node scripts/backupDB.js` + `node scripts/restoreDB.js data/backups/<ts> prod` (ver `scripts/restoreDB.js:8,26`). **Precaución:** `test` contiene datos delicados de producción actual - nunca borrar/sobrescribir `test`.
 
 > **Nota**: `GITHUB_TOKEN` ya no es necesaria. La persistencia GitHub se eliminó tras la migración a MongoDB (los ficheros `data/users/*.json` fueron borrados del repo). `github.js` y `scripts/migrateToMongo.js` fueron eliminados.
 
