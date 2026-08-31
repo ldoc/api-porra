@@ -530,6 +530,35 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // Endpoint Admin: Progreso de jugadores (panel admin)
+  if (reqUrl.pathname === '/api/admin/progress' && req.method === 'GET') {
+    const admin = await verifyAdmin(req);
+    if (!admin) {
+      sendJson(req, res, 403, { ok: false, error: 'Acceso denegado. Se requieren permisos de administrador.' });
+      return;
+    }
+    try {
+      const users = await User.find(
+        {},
+        'username avatar isAdmin predictions predictionsConfirmed finalPredictions squad'
+      );
+      const result = users.map(u => ({
+        username: u.username,
+        avatar: u.avatar || null,
+        isAdmin: u.isAdmin === true,
+        predictionsConfirmed: u.predictionsConfirmed === true,
+        predictions: u.predictions || {},
+        finalPredictions: u.finalPredictions || null,
+        squadCount: Array.isArray(u.squad) ? u.squad.length : 0
+      }));
+      sendJson(req, res, 200, { ok: true, users: result });
+    } catch (e) {
+      console.error('Error obteniendo progreso:', e);
+      sendJson(req, res, 500, { ok: false, error: 'Error interno del servidor' });
+    }
+    return;
+  }
+
   if (reqUrl.pathname === '/api/players' && req.method === 'GET') {
     const phaseCheck = await checkPhaseConsistency(req, res);
     if (!phaseCheck) return;
