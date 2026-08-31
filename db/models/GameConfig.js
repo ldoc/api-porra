@@ -17,6 +17,10 @@ const gameConfigSchema = new mongoose.Schema({
     }
   },
   fasesFechas: { type: Object, default: {} },
+  maintenance: {
+    enabled: { type: Boolean, default: false },
+    message: { type: String, default: 'Web en mantenimiento. Volvemos pronto.' }
+  },
   updatedBy: { type: String },
   updatedAt: { type: Date }
 }, {

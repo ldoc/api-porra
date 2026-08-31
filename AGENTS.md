@@ -27,6 +27,7 @@
 - **Sofascore como única fuente de datos externa**; los endpoints de matchstats scrapean en vivo y cachean en Mongo (`matchstats`).
 - **Caché HTTP (ETag/304)**: todo `sendJson` con GET y status 200 calcula un `ETag` débil (SHA-1 del JSON sin comprimir, módulo `api/etag.js`) y responde **304 sin cuerpo** si `If-None-Match` coincide. POST/PUT/DELETE y errores 4xx/5xx no llevan ETag. Implicación: el cuerpo de una respuesta 200 debe ser **determinista** (nada de timestamps por petición) o el 304 deja de funcionar.
 - **Delta de matchstats**: `GET /api/match-stats?since=<ISO>` filtra `{ lastUpdated: { $gt: since } }` (índice `lastUpdated: -1`, orden fijo por `eventId`). La respuesta incluye `serverTime` = `max(lastUpdated)` de la colección (determinista, sirve de cursor para el siguiente `since`; `null` con colección vacía). Sin `since` → respuesta completa clásica. El frontend usa SIEMPRE el `serverTime` del backend como cursor (nunca su reloj local).
+- **Modo mantenimiento**: `GameConfig.maintenance {enabled, message}`. `GET /api/config` lo expone; `PUT /api/admin/maintenance` lo muta (solo admin). Middleware global tras `globalLimiter` bloquea todo `/api/*` (excepto allowlist `/api/config`, `/api/auth/login`, `/`, `/api/admin/maintenance`) con `503 {error:'MAINTENANCE'}` si `enabled && !isAdmin`. Admins bypass via `verifyAdmin(req)`.
 
 ## Visión General
 
@@ -131,7 +132,7 @@ api-porra/
 
 | Método | Ruta                  | Descripción                                    |
 |--------|-----------------------|------------------------------------------------|
-| GET    | `/api/config`         | Configuración del torneo (faseJuego, totalMatches, squadSize, squadFormation, fasesFechas) |
+| GET    | `/api/config`         | Configuración del torneo (faseJuego, totalMatches, squadSize, squadFormation, fasesFechas, maintenance) |
 | GET    | `/api/avatars/taken`  | Lista de avatares ya cogidos por usuarios      |
 | GET    | `/api/players`        | Lista de todos los jugadores registrados       |
 
@@ -160,9 +161,11 @@ api-porra/
 | PUT    | `/api/admin/fase-juego`       | Cambiar la fase del juego (faseJuego)          |
 | PUT    | `/api/admin/config`           | Actualizar configuración completa (faseJuego, tournament) |
 | PUT    | `/api/admin/fases-fechas`     | Actualizar fechas de inicio/fin de las fases (fasesFechas) |
+| PUT    | `/api/admin/maintenance`      | Activar/desactivar mantenimiento (`{enabled:boolean, message:string max 500}`) |
 | GET    | `/api/admin/progress`         | Progreso de jugadores (panel admin)            |
 
 > `GameConfig` guarda un campo `fasesFechas` (`Object`, default `{}`) con las fechas de inicio/fin de cada fase: `{ FASE_X: { inicio, fin } }`, donde cada fecha es un string ISO o `null` (desconocida). `PUT /api/admin/fases-fechas` valida que las claves sean fases válidas (de las 13 definidas en `data/fases.json`) y que `inicio < fin` (módulo `api/fasesFechas.js`). `GET /api/config` lo devuelve dentro de `config.fasesFechas`.
+> `GameConfig.maintenance` (`{enabled:Boolean default false, message:String default 'Web en mantenimiento...'}`) controla el bloqueo global. Middleware tras `globalLimiter` en `server.js` responde `503 MAINTENANCE` a todo `/api/*` no-allowlisted si `enabled && !verifyAdmin(req)`. Allowlist: `/api/config`, `/api/auth/login`, `/`, `/api/admin/maintenance`.
 
 ### Modelo de Datos de Usuario (auth)
 
@@ -298,7 +301,8 @@ api-porra/
       "FASE_PREFINAL": { "inicio": null, "fin": null },
       "FASE_FINAL": { "inicio": null, "fin": null },
       "FASE_POSTFINAL": { "inicio": null, "fin": null }
-    }
+    },
+    "maintenance": { "enabled": false, "message": "Web en mantenimiento. Volvemos pronto." }
   }
 }
 ```

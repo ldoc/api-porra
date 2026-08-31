@@ -195,6 +195,31 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // Bloqueo por mantenimiento: si está activo, solo pasan admins y endpoints de lectura de config/login
+  // Esto capa a usuarios que ya tenían la web abierta (sus siguientes fetch recibirán 503)
+  try {
+    const maintenancePathsAllowlist = ['/api/config', '/api/auth/login', '/'];
+    const isMaintenanceBypassPath =
+      maintenancePathsAllowlist.includes(reqUrl.pathname) ||
+      reqUrl.pathname === '/api/admin/maintenance';
+    if (!isMaintenanceBypassPath && reqUrl.pathname.startsWith('/api/')) {
+      const maintenanceConfig = await GameConfig.findById('gameConfig');
+      if (maintenanceConfig?.maintenance?.enabled) {
+        const admin = await verifyAdmin(req);
+        if (!admin) {
+          sendJson(req, res, 503, {
+            ok: false,
+            error: 'MAINTENANCE',
+            message: maintenanceConfig.maintenance.message || 'Web en mantenimiento. Volvemos pronto.'
+          });
+          return;
+        }
+      }
+    }
+  } catch (e) {
+    console.error('Error verificando mantenimiento:', e);
+  }
+
   if (reqUrl.pathname === '/api/auth/register' && req.method === 'POST') {
     const rateLimitResult = registerLimiter(req);
     if (!rateLimitResult.ok) {
@@ -309,7 +334,8 @@ const server = http.createServer(async (req, res) => {
             totalMatches: 144,
             squadSize: 25,
             squadFormation: { G: 3, D: 8, M: 8, F: 6 },
-            fasesFechas: {}
+            fasesFechas: {},
+            maintenance: { enabled: false, message: 'Web en mantenimiento. Volvemos pronto.' }
           }
         });
         return;
@@ -322,7 +348,8 @@ const server = http.createServer(async (req, res) => {
           totalMatches: config.tournament.totalMatches,
           squadSize: config.tournament.squadSize,
           squadFormation: config.tournament.squadFormation,
-          fasesFechas: config.fasesFechas || {}
+          fasesFechas: config.fasesFechas || {},
+          maintenance: config.maintenance || { enabled: false, message: 'Web en mantenimiento. Volvemos pronto.' }
         }
       });
     } catch (e) {
@@ -450,6 +477,42 @@ const server = http.createServer(async (req, res) => {
       });
     } catch (error) {
       console.error('Error actualizando fechas de fases:', error);
+      sendJson(req, res, 500, { ok: false, error: 'Error interno del servidor' });
+    }
+    return;
+  }
+
+  // Endpoint Admin: Activar/desactivar modo mantenimiento
+  if (reqUrl.pathname === '/api/admin/maintenance' && req.method === 'PUT') {
+    const admin = await verifyAdmin(req);
+    if (!admin) {
+      sendJson(req, res, 403, { ok: false, error: 'Acceso denegado. Se requieren permisos de administrador.' });
+      return;
+    }
+    const body = await parseBody(req);
+    if (!body || body.__error) {
+      const status = body?.__error?.status || 400;
+      sendJson(req, res, status, { ok: false, error: body?.__error?.error || 'Body inválido' });
+      return;
+    }
+    const enabled = Boolean(body.enabled);
+    const message = typeof body.message === 'string' && body.message.trim()
+      ? body.message.trim().slice(0, 500)
+      : 'Web en mantenimiento. Volvemos pronto.';
+    try {
+      const config = await GameConfig.findByIdAndUpdate(
+        'gameConfig',
+        { $set: { maintenance: { enabled, message }, updatedBy: admin.username, updatedAt: new Date() } },
+        { new: true, upsert: true }
+      );
+      sendJson(req, res, 200, {
+        ok: true,
+        maintenance: config.maintenance,
+        updatedBy: config.updatedBy,
+        updatedAt: config.updatedAt
+      });
+    } catch (error) {
+      console.error('Error actualizando mantenimiento:', error);
       sendJson(req, res, 500, { ok: false, error: 'Error interno del servidor' });
     }
     return;
