@@ -7,10 +7,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 let _calendarCache = null;
 function loadCalendar() {
   if (_calendarCache) return _calendarCache;
+  const content = resolveDataFile('sofascore/calendar.json');
   try {
-    _calendarCache = JSON.parse(
-      fs.readFileSync(path.join(__dirname, '..', 'data', 'sofascore', 'calendar.json'), 'utf8')
-    );
+    _calendarCache = content ? JSON.parse(content) : null;
   } catch {
     _calendarCache = null;
   }
@@ -20,14 +19,36 @@ function loadCalendar() {
 let _teamsCache = null;
 function loadTeams() {
   if (_teamsCache) return _teamsCache;
+  const content = resolveDataFile('sofascore/teams.json');
   try {
-    _teamsCache = JSON.parse(
-      fs.readFileSync(path.join(__dirname, '..', 'data', 'sofascore', 'teams.json'), 'utf8')
-    );
+    _teamsCache = content ? JSON.parse(content) : [];
   } catch {
     _teamsCache = [];
   }
   return _teamsCache;
+}
+
+/**
+ * Resuelve un fichero de data/ soportando distintos layouts: ejecución local
+ * desde la raíz del proyecto (cwd) y bundle de Vercel (módulo api/ o plano).
+ * @param {string} rel ruta relativa dentro de data/ (ej: 'sofascore/calendar.json')
+ * @returns {string|null} contenido del fichero o null si no se encuentra
+ */
+function resolveDataFile(rel) {
+  const candidates = [
+    path.join(process.cwd(), 'data', rel),
+    path.join(__dirname, '..', 'data', rel),
+    path.join(__dirname, 'data', rel)
+  ];
+  for (const candidate of candidates) {
+    try {
+      if (fs.existsSync(candidate)) return fs.readFileSync(candidate, 'utf8');
+    } catch {
+      // siguiente candidato
+    }
+  }
+  console.error(`[standings] No se encontró data/${rel} en: ${candidates.join(', ')}`);
+  return null;
 }
 
 /**
