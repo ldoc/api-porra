@@ -2,10 +2,11 @@ export const DEFAULT_FORMATION = { G: 3, D: 8, M: 8, F: 6 };
 
 /**
  * Valida la composición de la plantilla ideal.
- * Reglas (AGENTS.md): 25 jugadores, 3 porteros, 8 defensas, 8 centrocampistas,
+ * Reglas (AGENTS.md): hasta 25 jugadores, máx 3 porteros, 8 defensas, 8 centrocampistas,
  * 6 delanteros, sin más de un jugador del mismo club.
+ * Permite guardados parciales (menos de 25 jugadores).
  * @param {Array} squad - Array de { id, nombre, posicion, club, equipo, ... }
- * @param {Object} formation - { G, D, M, F }
+ * @param {Object} formation - { G, D, M, F } (máximos por posición)
  * @returns {{ ok: true } | { ok: false, error: string }}
  */
 export function validateSquadComposition(squad, formation = DEFAULT_FORMATION) {
@@ -13,11 +14,15 @@ export function validateSquadComposition(squad, formation = DEFAULT_FORMATION) {
     return { ok: false, error: 'squad debe ser un array' };
   }
 
-  const expectedTotal = Object.values(formation).reduce((s, n) => s + n, 0);
-  if (squad.length !== expectedTotal) {
+  if (squad.length === 0) {
+    return { ok: false, error: 'La plantilla debe tener al menos un jugador' };
+  }
+
+  const maxTotal = Object.values(formation).reduce((s, n) => s + n, 0);
+  if (squad.length > maxTotal) {
     return {
       ok: false,
-      error: `La plantilla debe tener exactamente ${expectedTotal} jugadores (${JSON.stringify(formation)})`
+      error: `La plantilla no puede tener más de ${maxTotal} jugadores`
     };
   }
 
@@ -30,8 +35,8 @@ export function validateSquadComposition(squad, formation = DEFAULT_FORMATION) {
   }
 
   for (const [pos, n] of Object.entries(formation)) {
-    if (counts[pos] !== n) {
-      return { ok: false, error: `Formación inválida: se esperan ${n} jugadores en posición ${pos}, hay ${counts[pos]}` };
+    if (counts[pos] > n) {
+      return { ok: false, error: `Formación inválida: máximo ${n} jugadores en posición ${pos}, hay ${counts[pos]}` };
     }
   }
 

@@ -20,18 +20,32 @@ test('plantilla válida (25 / 3-8-8-6 / equipos únicos) → ok', () => {
   assert.strictEqual(validateSquadComposition(validSquad()).ok, true);
 });
 
-test('tamaño distinto de 25 → error', () => {
-  const r = validateSquadComposition(validSquad().slice(0, 20));
-  assert.strictEqual(r.ok, false);
-  assert.match(r.error, /25/);
+test('plantilla parcial (10 jugadores) → ok', () => {
+  const squad = validSquad().slice(0, 10);
+  assert.strictEqual(validateSquadComposition(squad).ok, true);
 });
 
-test('formación incorrecta (G=2, F=7) → error', () => {
+test('plantilla vacía → error', () => {
+  const r = validateSquadComposition([]);
+  assert.strictEqual(r.ok, false);
+  assert.match(r.error, /al menos un jugador/);
+});
+
+test('más de 25 jugadores → error', () => {
   const squad = validSquad();
-  squad[0].posicion = 'F';
+  squad.push({ id: 999, nombre: 'Extra', posicion: 'G', club: 'Otro', equipo: 999 });
   const r = validateSquadComposition(squad);
   assert.strictEqual(r.ok, false);
-  assert.match(r.error, /Formación/);
+  assert.match(r.error, /más de 25/);
+});
+
+test('exceder máximo por posición → error', () => {
+  const squad = validSquad().slice(0, 10);
+  // Cambiar un defensa a portero para exceder el máximo de porteros
+  squad[3].posicion = 'G';
+  const r = validateSquadComposition(squad);
+  assert.strictEqual(r.ok, false);
+  assert.match(r.error, /máximo/);
 });
 
 test('posición no permitida → error', () => {
