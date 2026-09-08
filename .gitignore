@@ -6,6 +6,8 @@ data/*
 data/sofascore/*
 !data/sofascore/calendar.json
 !data/sofascore/teams.json
+# Audios para mensajes con texto a voz
+!data/audio/
 .env
 opencode.json
 .opencode/
