@@ -8,7 +8,7 @@ node scripts/liveScrape.js <eventId...> [--interval 120]
 
 - Hace upsert cada `--interval` segundos (defecto 120, mínimo 15).
 - Borra cada doc 30 min tras `finishedAt` y termina solo cuando no quedan ids.
-> Nota v1: el estado scrapeado es siempre `live` (minuto 0); el borrado automático aún no se dispara solo. Limpieza manual: Ctrl+C + `DELETE /api/live-matches/:eventId` (admin).
+- Local/visitante, estado y minuto salen del evento Sofascore (nunca del orden de claves de `stats`).
 - Requiere `MONGODB_URI` en `.env` (usa la DB de desarrollo `/test`; nunca apuntes a `/prod`).
 
 ```bash

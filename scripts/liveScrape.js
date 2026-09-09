@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import mongoose from 'mongoose';
 import { config } from 'dotenv';
-import { scrapMatchStats, extractLiveMeta } from './matchStats.js';
+import { scrapMatchStats, fetchEventInfo } from './matchStats.js';
 import LiveMatch from '../db/models/LiveMatch.js';
 
 config();
@@ -28,27 +28,29 @@ export function shouldDeleteLive(finishedAt, now = new Date()) {
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
+// Local/visitante y estado SIEMPRE del evento Sofascore (eventInfo).
+// Nunca de Object.keys(stats): las claves numéricas se ordenan de menor
+// a mayor y voltean el marcador cuando el id visitante < id local.
+export function buildLiveUpdate(eventId, eventInfo, stats) {
+  const { estado, minuto, homeTeamId, awayTeamId } = eventInfo;
+  const homeGoles = stats?.[String(homeTeamId)]?.goles ?? eventInfo.homeGoles ?? 0;
+  const awayGoles = stats?.[String(awayTeamId)]?.goles ?? eventInfo.awayGoles ?? 0;
+  const update = { eventId, estado, minuto, homeTeamId, awayTeamId, homeGoles, awayGoles, stats, scrapedAt: new Date() };
+  if (estado === 'finalizado') update.finishedAt = new Date();
+  return update;
+}
+
 async function scrapeOnce(eventId) {
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      const stats = await scrapMatchStats(eventId);
-      const keys = Object.keys(stats).filter(k => k !== 'jugadores');
-      const homeTeamId = Number(keys[0]);
-      const awayTeamId = Number(keys[1]);
-      const homeGoles = stats[String(homeTeamId)]?.goles ?? 0;
-      const awayGoles = stats[String(awayTeamId)]?.goles ?? 0;
-      // Meta live: re-deriva estado desde el evento ya scrapeado vía stats es insuficiente;
-      // por eso extractLiveMeta se alimenta del evento interno: aquí usamos heurística
-      // finished solo si el scrapeo trae minutos 90+ y evento cerrado; el estado exacto
-      // lo fija extractLiveMeta cuando se amplíe el fetch de evento (v1: live por defecto).
-      const meta = { estado: 'live', minuto: 0, homeTeamId, awayTeamId, homeGoles, awayGoles };
-      const update = { eventId, ...meta, stats, scrapedAt: new Date() };
-      if (meta.estado === 'finalizado') update.finishedAt = new Date();
+      const [stats, eventInfo] = await Promise.all([scrapMatchStats(eventId), fetchEventInfo(eventId)]);
+      const update = buildLiveUpdate(eventId, eventInfo, stats);
+      const { homeGoles, awayGoles, estado, minuto } = update;
       // No pisar finishedAt ya fijado:
       const prev = await LiveMatch.findOne({ eventId }).lean();
       if (prev?.finishedAt && !update.finishedAt) update.finishedAt = prev.finishedAt;
       await LiveMatch.findOneAndUpdate({ eventId }, update, { upsert: true, new: true });
-      console.log(`✔ ${eventId} → ${homeGoles}-${awayGoles} (${meta.estado})`);
+      console.log(`✔ ${eventId} → ${homeGoles}-${awayGoles} (${estado}${minuto ? ` ${minuto}'` : ''})`);
       return true;
     } catch (err) {
       console.log(`✘ ${eventId} intento ${attempt}/3 → ${err.message}`);

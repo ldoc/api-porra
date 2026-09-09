@@ -127,6 +127,14 @@ function processIncidents(incidentsData) {
     return { penaltiesScored, penaltiesSaved, goalsByGoalkeeper };
 }
 
+export async function fetchEventInfo(eventId) {
+    const eventData = await fetchSofascore(`https://www.sofascore.com/api/v1/event/${eventId}`);
+    const ev = eventData?.event || {};
+    const homeGoles = ev.homeScore?.display ?? 0;
+    const awayGoles = ev.awayScore?.display ?? 0;
+    return extractLiveMeta(eventData, homeGoles, awayGoles);
+}
+
 export function buildTeamStats(goles, tandaPenaltis) {
     const stats = { goles };
     if (tandaPenaltis !== undefined) {
