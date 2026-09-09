@@ -8,7 +8,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
-import { connectDB, User, Invitation, MatchStats, Message } from './db/index.js';
+import { connectDB, User, Invitation, MatchStats, Message, LiveMatch } from './db/index.js';
 import GameConfig from './db/models/GameConfig.js';
 import { register, login, getProfile, saveProfile, getTakenAvatars, getAllPlayers, getSquad, saveSquad, changePassword } from './api/auth.js';
 import { scrapMatchStats } from './scripts/matchStats.js';
@@ -1175,6 +1175,48 @@ const server = http.createServer(async (req, res) => {
       sendJson(req, res, 200, { ok: true, matchStats, serverTime });
     } catch (e) {
       sendJson(req, res, 500, { ok: false, error: 'Error al obtener estadísticas' });
+    }
+    return;
+  }
+
+  // Endpoint: Live matches (seguimiento online, colección livematchs)
+  if (reqUrl.pathname === '/api/live-matches' && req.method === 'GET') {
+    const phaseCheck = await checkPhaseConsistency(req, res);
+    if (!phaseCheck) return;
+    try {
+      const liveMatches = await LiveMatch.find({}).sort({ eventId: 1 }).lean();
+      const last = liveMatches.reduce((m, d) => (!m || d.scrapedAt > m ? d.scrapedAt : m), null);
+      sendJson(req, res, 200, { ok: true, liveMatches, serverTime: last ? new Date(last).toISOString() : null });
+    } catch (e) {
+      sendJson(req, res, 500, { ok: false, error: 'Error al obtener live' });
+    }
+    return;
+  }
+
+  if (reqUrl.pathname === '/api/live-matches/updated' && req.method === 'GET') {
+    const phaseCheck = await checkPhaseConsistency(req, res);
+    if (!phaseCheck) return;
+    try {
+      const last = await LiveMatch.findOne({}, 'eventId scrapedAt').sort({ scrapedAt: -1 }).lean();
+      const count = await LiveMatch.countDocuments();
+      sendJson(req, res, 200, { ok: true, count, lastUpdated: last?.scrapedAt ? last.scrapedAt.toISOString() : null });
+    } catch (e) {
+      sendJson(req, res, 500, { ok: false, error: 'Error al obtener estado live' });
+    }
+    return;
+  }
+
+  if (reqUrl.pathname.startsWith('/api/live-matches/') && req.method === 'DELETE') {
+    const eventId = parseInt(reqUrl.pathname.split('/api/live-matches/')[1]);
+    if (isNaN(eventId)) { sendJson(req, res, 400, { ok: false, error: 'eventId inválido' }); return; }
+    const admin = await verifyAdmin(req);
+    if (!admin) { sendJson(req, res, 403, { ok: false, error: 'Acceso denegado. Se requieren permisos de administrador.' }); return; }
+    try {
+      const result = await LiveMatch.deleteOne({ eventId });
+      if (result.deletedCount === 0) sendJson(req, res, 404, { ok: false, error: 'LiveMatch no encontrado' });
+      else sendJson(req, res, 200, { ok: true, deleted: eventId });
+    } catch (e) {
+      sendJson(req, res, 500, { ok: false, error: 'Error al eliminar live' });
     }
     return;
   }
