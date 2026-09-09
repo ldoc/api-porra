@@ -1335,7 +1335,9 @@ const server = http.createServer(async (req, res) => {
       saveFinalPredictions: 'PUT /api/final-predictions',
       getSquad: 'GET /api/squad?username=xxxx',
       saveSquad: 'PUT /api/squad',
-      matchStats: 'GET /api/match-stats/:eventId'
+      matchStats: 'GET /api/match-stats/:eventId',
+      liveMatches: 'GET /api/live-matches',
+      liveUpdated: 'GET /api/live-matches/updated'
     },
     timestamp: new Date().toISOString()
   });
