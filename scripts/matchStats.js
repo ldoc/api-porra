@@ -219,3 +219,20 @@ export async function scrapMatchStats(eventId) {
         jugadores: allPlayers
     };
 }
+export function extractLiveMeta(eventData, homeGoals, awayGoals) {
+  const ev = eventData?.event || {};
+  const type = String(ev.status?.type || '').toLowerCase();
+  const desc = String(ev.status?.description || '').toLowerCase();
+  let estado = 'live';
+  if (type === 'finished' || type === 'ft' || desc.includes('finished') || desc.includes('full')) estado = 'finalizado';
+  else if (type === 'halftime' || type === 'ht' || desc.includes('half-time') || desc.includes('halftime')) estado = 'descanso';
+  const minuto = Number(ev.time?.minute ?? ev.minute ?? 0) || 0;
+  return {
+    estado,
+    minuto,
+    homeTeamId: ev.homeTeam?.id,
+    awayTeamId: ev.awayTeam?.id,
+    homeGoles: homeGoals ?? 0,
+    awayGoles: awayGoals ?? 0
+  };
+}
