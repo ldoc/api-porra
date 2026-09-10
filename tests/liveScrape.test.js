@@ -42,3 +42,10 @@ test('fija finishedAt al finalizar y usa goles del evento si faltan en stats', (
   assert.equal(update.homeGoles, 2);
   assert.equal(update.awayGoles, 2);
 });
+
+test('buildLiveUpdate guarda últimos 20 incidents', () => {
+  const inc = Array.from({ length: 25 }, (_, i) => ({ key: `s${i}`, tipo: 'sub', minuto: 60 + i, teamId: 2677, playerId: 9, playerName: 'X' }));
+  const u = buildLiveUpdate(16939028, { estado: 'live', minuto: 80, homeTeamId: 2677, awayTeamId: 1164, homeGoles: 3, awayGoles: 1 }, { jugadores: [] }, inc);
+  assert.equal(u.incidents.length, 20);
+  assert.equal(u.incidents[19].key, 's24');
+});

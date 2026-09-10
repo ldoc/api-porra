@@ -9,6 +9,7 @@ const liveMatchSchema = new mongoose.Schema({
   homeGoles: { type: Number, required: true },
   awayGoles: { type: Number, required: true },
   stats: { type: mongoose.Schema.Types.Mixed, required: true },
+  incidents: { type: [new mongoose.Schema({ key: String, tipo: { type: String, enum: ['sub', 'card'] }, minuto: Number, teamId: Number, playerId: Number, playerName: String }, { _id: false })], default: [] },
   scrapedAt: { type: Date, default: Date.now, index: -1 },
   finishedAt: { type: Date, default: null }
 });

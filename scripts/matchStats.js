@@ -127,6 +127,16 @@ function processIncidents(incidentsData) {
     return { penaltiesScored, penaltiesSaved, goalsByGoalkeeper };
 }
 
+export async function fetchLiveIncidents(eventId) {
+  const data = await fetchSofascore(`https://www.sofascore.com/api/v1/event/${eventId}/incidents`).catch(() => null);
+  const out = [];
+  for (const i of data?.incidents || []) {
+    if (i.incidentType === 'substitution') out.push({ key: `sub-${i.time ?? ''}-${i.playerIn?.id ?? ''}`, tipo: 'sub', minuto: i.time ?? 0, teamId: i.team?.id, playerId: i.playerIn?.id, playerName: i.playerIn?.name });
+    else if (i.incidentType === 'card') out.push({ key: `card-${i.time ?? ''}-${i.player?.id ?? ''}-${i.incidentClass ?? ''}`, tipo: 'card', minuto: i.time ?? 0, teamId: i.team?.id, playerId: i.player?.id, playerName: i.player?.name });
+  }
+  return out.slice(-20);
+}
+
 export async function fetchEventInfo(eventId) {
     const eventData = await fetchSofascore(`https://www.sofascore.com/api/v1/event/${eventId}`);
     const ev = eventData?.event || {};

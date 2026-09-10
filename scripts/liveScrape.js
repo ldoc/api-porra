@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import mongoose from 'mongoose';
 import { config } from 'dotenv';
-import { scrapMatchStats, fetchEventInfo } from './matchStats.js';
+import { scrapMatchStats, fetchEventInfo, fetchLiveIncidents } from './matchStats.js';
 import LiveMatch from '../db/models/LiveMatch.js';
 
 config();
@@ -31,11 +31,11 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 // Local/visitante y estado SIEMPRE del evento Sofascore (eventInfo).
 // Nunca de Object.keys(stats): las claves numéricas se ordenan de menor
 // a mayor y voltean el marcador cuando el id visitante < id local.
-export function buildLiveUpdate(eventId, eventInfo, stats) {
+export function buildLiveUpdate(eventId, eventInfo, stats, incidents = []) {
   const { estado, minuto, homeTeamId, awayTeamId } = eventInfo;
   const homeGoles = stats?.[String(homeTeamId)]?.goles ?? eventInfo.homeGoles ?? 0;
   const awayGoles = stats?.[String(awayTeamId)]?.goles ?? eventInfo.awayGoles ?? 0;
-  const update = { eventId, estado, minuto, homeTeamId, awayTeamId, homeGoles, awayGoles, stats, scrapedAt: new Date() };
+  const update = { eventId, estado, minuto, homeTeamId, awayTeamId, homeGoles, awayGoles, stats, incidents: (incidents || []).slice(-20), scrapedAt: new Date() };
   if (estado === 'finalizado') update.finishedAt = new Date();
   return update;
 }
@@ -43,8 +43,8 @@ export function buildLiveUpdate(eventId, eventInfo, stats) {
 async function scrapeOnce(eventId) {
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      const [stats, eventInfo] = await Promise.all([scrapMatchStats(eventId), fetchEventInfo(eventId)]);
-      const update = buildLiveUpdate(eventId, eventInfo, stats);
+      const [stats, eventInfo, incidents] = await Promise.all([scrapMatchStats(eventId), fetchEventInfo(eventId), fetchLiveIncidents(eventId)]);
+      const update = buildLiveUpdate(eventId, eventInfo, stats, incidents);
       const { homeGoles, awayGoles, estado, minuto } = update;
       // No pisar finishedAt ya fijado:
       const prev = await LiveMatch.findOne({ eventId }).lean();
