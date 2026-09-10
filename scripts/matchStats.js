@@ -127,14 +127,25 @@ function processIncidents(incidentsData) {
     return { penaltiesScored, penaltiesSaved, goalsByGoalkeeper };
 }
 
-export async function fetchLiveIncidents(eventId) {
-  const data = await fetchSofascore(`https://www.sofascore.com/api/v1/event/${eventId}/incidents`).catch(() => null);
+function mapCardColor(cls) {
+  const c = String(cls ?? '').toLowerCase();
+  if (c === 'red' || c === 'yellowred') return 'roja';
+  return 'amarilla';
+}
+
+export function mapLiveIncidents(incidents) {
   const out = [];
-  for (const i of data?.incidents || []) {
-    if (i.incidentType === 'substitution') out.push({ key: `sub-${i.time ?? ''}-${i.playerIn?.id ?? ''}`, tipo: 'sub', minuto: i.time ?? 0, teamId: i.team?.id, playerId: i.playerIn?.id, playerName: i.playerIn?.name });
-    else if (i.incidentType === 'card') out.push({ key: `card-${i.time ?? ''}-${i.player?.id ?? ''}-${i.incidentClass ?? ''}`, tipo: 'card', minuto: i.time ?? 0, teamId: i.team?.id, playerId: i.player?.id, playerName: i.player?.name });
+  for (const i of incidents || []) {
+    if (i.incidentType === 'substitution') out.push({ key: `sub-${i.time ?? ''}-${i.playerIn?.id ?? ''}`, tipo: 'sub', minuto: i.time ?? 0, teamId: i.team?.id, playerId: i.playerIn?.id, playerName: i.playerIn?.name, playerOut: i.playerOut?.name ?? null, playerOutId: i.playerOut?.id ?? null });
+    else if (i.incidentType === 'card') out.push({ key: `card-${i.time ?? ''}-${i.player?.id ?? ''}-${i.incidentClass ?? ''}`, tipo: 'card', minuto: i.time ?? 0, teamId: i.team?.id, playerId: i.player?.id, playerName: i.player?.name, color: mapCardColor(i.incidentClass) });
   }
   return out.slice(-20);
+}
+
+export async function fetchLiveIncidents(eventId) {
+  const data = await fetchSofascore(`https://www.sofascore.com/api/v1/event/${eventId}/incidents`).catch(() => null);
+  if (!data) return null;
+  return mapLiveIncidents(data.incidents);
 }
 
 export async function fetchEventInfo(eventId) {

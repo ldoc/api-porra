@@ -31,11 +31,12 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 // Local/visitante y estado SIEMPRE del evento Sofascore (eventInfo).
 // Nunca de Object.keys(stats): las claves numéricas se ordenan de menor
 // a mayor y voltean el marcador cuando el id visitante < id local.
-export function buildLiveUpdate(eventId, eventInfo, stats, incidents = []) {
+export function buildLiveUpdate(eventId, eventInfo, stats, incidents = null, prevIncidents = null) {
   const { estado, minuto, homeTeamId, awayTeamId } = eventInfo;
   const homeGoles = stats?.[String(homeTeamId)]?.goles ?? eventInfo.homeGoles ?? 0;
   const awayGoles = stats?.[String(awayTeamId)]?.goles ?? eventInfo.awayGoles ?? 0;
-  const update = { eventId, estado, minuto, homeTeamId, awayTeamId, homeGoles, awayGoles, stats, incidents: (incidents || []).slice(-20), scrapedAt: new Date() };
+  const fresh = incidents ?? prevIncidents ?? [];
+  const update = { eventId, estado, minuto, homeTeamId, awayTeamId, homeGoles, awayGoles, stats, incidents: fresh.slice(-20), scrapedAt: new Date() };
   if (estado === 'finalizado') update.finishedAt = new Date();
   return update;
 }
@@ -44,10 +45,10 @@ async function scrapeOnce(eventId) {
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       const [stats, eventInfo, incidents] = await Promise.all([scrapMatchStats(eventId), fetchEventInfo(eventId), fetchLiveIncidents(eventId)]);
-      const update = buildLiveUpdate(eventId, eventInfo, stats, incidents);
+      const prev = await LiveMatch.findOne({ eventId }).lean();
+      const update = buildLiveUpdate(eventId, eventInfo, stats, incidents, prev?.incidents);
       const { homeGoles, awayGoles, estado, minuto } = update;
       // No pisar finishedAt ya fijado:
-      const prev = await LiveMatch.findOne({ eventId }).lean();
       if (prev?.finishedAt && !update.finishedAt) update.finishedAt = prev.finishedAt;
       await LiveMatch.findOneAndUpdate({ eventId }, update, { upsert: true, new: true });
       console.log(`✔ ${eventId} → ${homeGoles}-${awayGoles} (${estado}${minuto ? ` ${minuto}'` : ''})`);

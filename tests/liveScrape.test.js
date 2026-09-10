@@ -2,6 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseLiveArgs, shouldDeleteLive, buildLiveUpdate } from '../scripts/liveScrape.js';
+import { mapLiveIncidents } from '../scripts/matchStats.js';
 
 test('parsea ids e intervalo', () => {
   assert.deepEqual(parseLiveArgs(['14566909', '14566910', '--interval', '60']), { eventIds: [14566909, 14566910], intervalMs: 60000 });
@@ -48,4 +49,35 @@ test('buildLiveUpdate guarda últimos 20 incidents', () => {
   const u = buildLiveUpdate(16939028, { estado: 'live', minuto: 80, homeTeamId: 2677, awayTeamId: 1164, homeGoles: 3, awayGoles: 1 }, { jugadores: [] }, inc);
   assert.equal(u.incidents.length, 20);
   assert.equal(u.incidents[19].key, 's24');
+});
+
+test('mapLiveIncidents guarda el que sale (playerOut) en sustituciones', () => {
+  const out = mapLiveIncidents([{ incidentType: 'substitution', time: 70, team: { id: 2677 }, playerIn: { id: 9, name: 'Entra' }, playerOut: { id: 10, name: 'Sale' } }]);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].tipo, 'sub');
+  assert.equal(out[0].playerName, 'Entra');
+  assert.equal(out[0].playerOut, 'Sale');
+  assert.equal(out[0].playerOutId, 10);
+});
+
+test('mapLiveIncidents mapea color de tarjeta (yellow→amarilla, red/yellowRed→roja)', () => {
+  const out = mapLiveIncidents([
+    { incidentType: 'card', incidentClass: 'yellow', time: 30, team: { id: 1 }, player: { id: 5, name: 'A' } },
+    { incidentType: 'card', incidentClass: 'red', time: 80, team: { id: 2 }, player: { id: 6, name: 'B' } },
+    { incidentType: 'card', incidentClass: 'yellowRed', time: 85, team: { id: 2 }, player: { id: 7, name: 'C' } }
+  ]);
+  assert.deepEqual(out.map(i => i.color), ['amarilla', 'roja', 'roja']);
+  assert.equal(out[0].tipo, 'card');
+});
+
+test('buildLiveUpdate preserva incidents previos cuando el fetch falla (null)', () => {
+  const prev = [{ key: 'sub-70-9', tipo: 'sub', minuto: 70, teamId: 2677, playerId: 9, playerName: 'X' }];
+  const u = buildLiveUpdate(1, { estado: 'live', minuto: 75, homeTeamId: 1, awayTeamId: 2, homeGoles: 1, awayGoles: 0 }, { jugadores: [] }, null, prev);
+  assert.deepEqual(u.incidents, prev);
+});
+
+test('buildLiveUpdate con fetch OK vacío ([]) no resucita incidents previos', () => {
+  const prev = [{ key: 'sub-70-9', tipo: 'sub', minuto: 70, teamId: 2677, playerId: 9, playerName: 'X' }];
+  const u = buildLiveUpdate(1, { estado: 'live', minuto: 75, homeTeamId: 1, awayTeamId: 2, homeGoles: 1, awayGoles: 0 }, { jugadores: [] }, [], prev);
+  assert.deepEqual(u.incidents, []);
 });
