@@ -46,11 +46,34 @@ function restoreIds(value) {
   return value;
 }
 
+// JSON.stringify convierte Date a string ISO. Como el restore usa insertMany
+// crudo (sin Mongoose, sin casteo), hay que devolver los campos Date a Date;
+// si no, los .toISOString() de server.js revientan (500 'Error al obtener
+// estadísticas', etc.). Solo campos Date conocidos por colección:
+// fechaInicio/fechaFin de messages son String y NO se tocan.
+const DATE_FIELDS = {
+  matchstats: ['lastUpdated'],
+  messages: ['createdAt'],
+  invitations: ['createdAt'],
+  users: ['createdAt'],
+  gameconfigs: ['updatedAt']
+};
+
+function restoreDates(collectionName, doc) {
+  for (const field of DATE_FIELDS[collectionName] || []) {
+    if (typeof doc[field] === 'string') {
+      const dt = new Date(doc[field]);
+      if (!isNaN(dt)) doc[field] = dt;
+    }
+  }
+  return doc;
+}
+
 let totalDocs = 0;
 
 for (const file of files) {
   const collectionName = file.replace('.json', '');
-  const docs = JSON.parse(readFileSync(`${backupDir}/${file}`, 'utf8')).map(restoreIds);
+  const docs = JSON.parse(readFileSync(`${backupDir}/${file}`, 'utf8')).map(restoreIds).map(d => restoreDates(collectionName, d));
 
   if (docs.length === 0) {
     console.log(`  ${collectionName}: vacío, saltando`);
