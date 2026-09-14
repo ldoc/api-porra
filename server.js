@@ -543,10 +543,14 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     try {
+      let isGuestInvite = false;
+      const body = await parseBody(req);
+      if (body && !body.__error && body.isGuest === true) isGuestInvite = true;
       const code = crypto.randomBytes(3).toString('hex').toUpperCase();
       const invitation = await Invitation.create({
         code,
         usedBy: null,
+        isGuest: isGuestInvite,
         createdAt: new Date()
       });
       sendJson(req, res, 201, { ok: true, invitation });
