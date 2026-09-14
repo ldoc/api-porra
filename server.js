@@ -190,6 +190,14 @@ function sendJson(req, res, statusCode, data, cacheSeconds) {
   }
 }
 
+function sendJsonPrivate(req, res, statusCode, data, cacheSeconds) {
+  res.setHeader('Vary', 'Authorization');
+  if (cacheSeconds) {
+    res.setHeader('Cache-Control', `private, max-age=${cacheSeconds}, stale-while-revalidate=${cacheSeconds * 2}`);
+  }
+  sendJson(req, res, statusCode, data);
+}
+
 await connectDB();
 
 const server = http.createServer(async (req, res) => {
@@ -558,9 +566,12 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     try {
-      let isGuestInvite = false;
       const body = await parseBody(req);
-      if (body && !body.__error && body.isGuest === true) isGuestInvite = true;
+      if (body && body.__error) {
+        sendJson(req, res, body.__error.status, { ok: false, error: body.__error.error });
+        return;
+      }
+      const isGuestInvite = body && body.isGuest === true;
       const code = crypto.randomBytes(3).toString('hex').toUpperCase();
       const invitation = await Invitation.create({
         code,
@@ -783,7 +794,7 @@ const server = http.createServer(async (req, res) => {
     if (!phaseCheck) return;
     const viewer = await resolveViewer(req);
     const players = await getAllPlayers(guestReadFilter(viewer));
-    sendJson(req, res, 200, { ok: true, players }, 120);
+    sendJsonPrivate(req, res, 200, { ok: true, players }, 120);
     return;
   }
 
@@ -1099,7 +1110,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     const result = await getSquad(username);
-    sendJson(req, res, result.ok ? 200 : 404, result, 300);
+    sendJsonPrivate(req, res, result.ok ? 200 : 404, result, 300);
     return;
   }
 
@@ -1126,7 +1137,7 @@ const server = http.createServer(async (req, res) => {
           squads[user.username] = user.squad;
         }
       }
-      sendJson(req, res, 200, { ok: true, squads }, isPublic ? 300 : 0);
+      sendJsonPrivate(req, res, 200, { ok: true, squads }, isPublic ? 300 : 0);
     } catch (e) {
       sendJson(req, res, 500, { ok: false, error: 'Error al obtener plantillas' });
     }

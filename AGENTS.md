@@ -194,7 +194,8 @@ api-porra/
     "roundOf32": []
   },
   "predictionsConfirmed": false,
-  "isAdmin": false
+  "isAdmin": false,
+  "isGuest": "boolean (false por defecto)"
 }
 ```
 
