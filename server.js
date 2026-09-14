@@ -919,11 +919,6 @@ const server = http.createServer(async (req, res) => {
   if (reqUrl.pathname === '/api/predictions/confirm' && req.method === 'POST') {
     const phaseCheck = await checkPhaseConsistency(req, res);
     if (!phaseCheck) return;
-    const currentPhase = await getFaseJuego();
-    if (currentPhase !== 'FASE_PRETEMPORADA') {
-      sendJson(req, res, 409, { ok: false, error: 'La confirmación solo está disponible en FASE_PRETEMPORADA' });
-      return;
-    }
     const auth = authenticate(req);
     if (!auth.ok) {
       sendJson(req, res, auth.status, { ok: false, error: auth.error });
@@ -936,6 +931,11 @@ const server = http.createServer(async (req, res) => {
     }
     if (bypassesGameLocks(user)) {
       sendJson(req, res, 200, { ok: true, isGuest: true });
+      return;
+    }
+    const currentPhase = await getFaseJuego();
+    if (!bypassesGameLocks(user) && currentPhase !== 'FASE_PRETEMPORADA') {
+      sendJson(req, res, 409, { ok: false, error: 'La confirmación solo está disponible en FASE_PRETEMPORADA' });
       return;
     }
     if (user.predictionsConfirmed) {
