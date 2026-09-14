@@ -19,6 +19,7 @@ import { validateMessage } from './api/messageValidation.js';
 import { computeWeakEtag, etagMatches } from './api/etag.js';
 import { parseSinceParam } from './api/matchStatsFilter.js';
 import { calculateUserStandings } from './api/standings.js';
+import { guestReadFilter, canSeeGuests, bypassesGameLocks } from './api/guest.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -96,6 +97,20 @@ async function verifyAdmin(req) {
   } catch (error) {
     return null;
   }
+}
+
+async function resolveViewer(req) {
+  const auth = authenticate(req);
+  if (!auth.ok) {
+    return { authed: false, username: null, isGuest: false, isAdmin: false };
+  }
+  const user = await User.findOne({ username: auth.username }, 'isGuest isAdmin').lean();
+  return {
+    authed: true,
+    username: auth.username,
+    isGuest: user?.isGuest === true,
+    isAdmin: user?.isAdmin === true
+  };
 }
 
 const fasesPath = path.join(__dirname, 'data', 'fases.json');
@@ -609,12 +624,13 @@ const server = http.createServer(async (req, res) => {
     try {
       const users = await User.find(
         {},
-        'username avatar isAdmin predictions predictionsConfirmed finalPredictions squad'
+        'username avatar isAdmin isGuest predictions predictionsConfirmed finalPredictions squad'
       );
       const result = users.map(u => ({
         username: u.username,
         avatar: u.avatar || null,
         isAdmin: u.isAdmin === true,
+        isGuest: u.isGuest === true,
         predictionsConfirmed: u.predictionsConfirmed === true,
         predictions: u.predictions || {},
         finalPredictions: u.finalPredictions || null,
@@ -765,7 +781,8 @@ const server = http.createServer(async (req, res) => {
   if (reqUrl.pathname === '/api/players' && req.method === 'GET') {
     const phaseCheck = await checkPhaseConsistency(req, res);
     if (!phaseCheck) return;
-    const players = await getAllPlayers();
+    const viewer = await resolveViewer(req);
+    const players = await getAllPlayers(guestReadFilter(viewer));
     sendJson(req, res, 200, { ok: true, players }, 120);
     return;
   }
@@ -789,6 +806,11 @@ const server = http.createServer(async (req, res) => {
     }
     const user = await User.findOne({ username: username.toLowerCase() });
     if (!user) {
+      sendJson(req, res, 404, { ok: false, error: 'Usuario no encontrado' });
+      return;
+    }
+    const viewer = await resolveViewer(req);
+    if (user.isGuest && !canSeeGuests(viewer)) {
       sendJson(req, res, 404, { ok: false, error: 'Usuario no encontrado' });
       return;
     }
@@ -957,6 +979,11 @@ const server = http.createServer(async (req, res) => {
       sendJson(req, res, 404, { ok: false, error: 'Usuario no encontrado' });
       return;
     }
+    const viewer = await resolveViewer(req);
+    if (user.isGuest && !canSeeGuests(viewer)) {
+      sendJson(req, res, 404, { ok: false, error: 'Usuario no encontrado' });
+      return;
+    }
     sendJson(req, res, 200, { ok: true, finalPredictions: user.finalPredictions || null });
     return;
   }
@@ -1051,6 +1078,16 @@ const server = http.createServer(async (req, res) => {
       sendJson(req, res, 403, { ok: false, error: 'Solo puedes ver tu propia plantilla' });
       return;
     }
+    const targetUser = await User.findOne({ username: username.toLowerCase() }, 'isGuest username');
+    if (!targetUser) {
+      sendJson(req, res, 404, { ok: false, error: 'Usuario no encontrado' });
+      return;
+    }
+    const viewer = await resolveViewer(req);
+    if (targetUser.isGuest && !canSeeGuests(viewer)) {
+      sendJson(req, res, 404, { ok: false, error: 'Usuario no encontrado' });
+      return;
+    }
     const result = await getSquad(username);
     sendJson(req, res, result.ok ? 200 : 404, result, 300);
     return;
@@ -1068,8 +1105,9 @@ const server = http.createServer(async (req, res) => {
         sendJson(req, res, 401, { ok: false, error: 'Autenticación requerida durante la fase de edición' });
         return;
       }
+      const viewer = await resolveViewer(req);
       const query = isPublic
-        ? User.find({}, 'username squad')
+        ? User.find(guestReadFilter(viewer), 'username squad')
         : User.find({ username: auth.username }, 'username squad');
       const users = await query;
       const squads = {};
@@ -1221,8 +1259,9 @@ const server = http.createServer(async (req, res) => {
         sendJson(req, res, 401, { ok: false, error: 'Autenticación requerida durante la fase de edición' });
         return;
       }
+      const viewer = await resolveViewer(req);
       const query = isPublic
-        ? User.find({}, 'username predictions finalPredictions squad')
+        ? User.find(guestReadFilter(viewer), 'username predictions finalPredictions squad')
         : User.find({ username: auth.username }, 'username predictions finalPredictions squad');
       const users = await query;
 

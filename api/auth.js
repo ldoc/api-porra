@@ -134,7 +134,7 @@ export async function getProfile(username) {
 }
 
 export async function getTakenAvatars() {
-  const taken = await User.find({ avatar: { $ne: null } }).distinct('avatar');
+  const taken = await User.find({ isGuest: { $ne: true }, avatar: { $ne: null } }).distinct('avatar');
   return taken;
 }
 
