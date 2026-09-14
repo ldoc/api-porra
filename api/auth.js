@@ -4,6 +4,7 @@ import { User } from '../db/index.js';
 import { Invitation } from '../db/index.js';
 import { validateSquadComposition } from './squadValidation.js';
 import { validateUsername } from './middleware.js';
+import { isGuest, isGuestRegistrationAllowed } from './guest.js';
 
 if (!process.env.JWT_SECRET) {
   throw new Error('JWT_SECRET no está definido en las variables de entorno');
@@ -23,11 +24,6 @@ function verifyPassword(password, stored) {
 }
 
 export async function register(username, password, invitationCode, faseJuego) {
-  // Verificar que el registro esté abierto (solo FASE_PRETEMPORADA)
-  if (faseJuego && faseJuego !== 'FASE_PRETEMPORADA') {
-    return { ok: false, error: 'El registro está cerrado. La competición ya ha comenzado.' };
-  }
-
   if (!username || !password || !invitationCode) {
     return { ok: false, error: 'Usuario, contraseña y código de invitación son obligatorios' };
   }
@@ -55,12 +51,17 @@ export async function register(username, password, invitationCode, faseJuego) {
     return { ok: false, error: 'Este código de invitación ya ha sido utilizado' };
   }
 
+  if (!isGuestRegistrationAllowed(invitation, faseJuego)) {
+    return { ok: false, error: 'El registro está cerrado. La competición ya ha comenzado.' };
+  }
+
   const passwordHash = hashPassword(password);
 
   await User.create({
     clave,
     username: username.toLowerCase(),
     passwordHash,
+    isGuest: isGuest(invitation),
     createdAt: new Date()
   });
 
@@ -76,7 +77,7 @@ export async function register(username, password, invitationCode, faseJuego) {
   return {
     ok: true,
     token,
-    user: { username: username.toLowerCase() }
+    user: { username: username.toLowerCase(), isGuest: isGuest(invitation) }
   };
 }
 
@@ -107,7 +108,8 @@ export async function login(username, password) {
     user: {
       username: user.username,
       avatar: user.avatar || null,
-      predictionsConfirmed: user.predictionsConfirmed === true
+      predictionsConfirmed: user.predictionsConfirmed === true,
+      isGuest: user.isGuest === true
     }
   };
 }
@@ -126,7 +128,8 @@ export async function getProfile(username) {
     ok: true,
     avatar: user.avatar || null,
     isAdmin: user.isAdmin === true,
-    predictionsConfirmed: user.predictionsConfirmed === true
+    predictionsConfirmed: user.predictionsConfirmed === true,
+    isGuest: user.isGuest === true,
   };
 }
 
@@ -135,8 +138,8 @@ export async function getTakenAvatars() {
   return taken;
 }
 
-export async function getAllPlayers() {
-  const users = await User.find({}, 'username avatar');
+export async function getAllPlayers(filter = {}) {
+  const users = await User.find(filter, 'username avatar');
   return users.map(user => ({
     name: user.username,
     avatar: user.avatar || null,
