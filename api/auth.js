@@ -139,10 +139,11 @@ export async function getTakenAvatars() {
 }
 
 export async function getAllPlayers(filter = {}) {
-  const users = await User.find(filter, 'username avatar');
+  const users = await User.find(filter, 'username avatar isGuest');
   return users.map(user => ({
     name: user.username,
     avatar: user.avatar || null,
+    isGuest: user.isGuest === true,
   }));
 }
 
