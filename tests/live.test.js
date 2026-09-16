@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isLiveWindow, getLiveRefreshSecs, buildLiveDoc, selectLiveMatches, buildLiveResponse } from '../api/live.js';
+import { isLiveWindow, getLiveRefreshSecs, buildLiveDoc, selectLiveMatches, buildLiveResponse, minuteToStatus } from '../api/live.js';
 
 const H = 3600;
 const nowMs = Date.parse('2026-09-16T20:00:00Z');
@@ -35,6 +35,12 @@ test('selectLiveMatches filtra por ventana', () => {
     { id: 2, fecha: nowMs / 1000 + 20 * H }
   ];
   assert.deepEqual(selectLiveMatches(cal, nowMs).map(m => m.id), [1]);
+});
+
+test('minuteToStatus mapea 45/90/final', () => {
+  assert.equal(minuteToStatus(10), 'LIVE');
+  assert.equal(minuteToStatus(46), 'HT');
+  assert.equal(minuteToStatus(95), 'FT');
 });
 
 test('buildLiveResponse ordena por eventId y serverTime es el max', () => {

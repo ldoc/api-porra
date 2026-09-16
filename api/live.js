@@ -13,6 +13,12 @@ export function getLiveRefreshSecs(config) {
   return Number.isInteger(v) && v > 0 ? v : LIVE_REFRESH_DEFAULT;
 }
 
+export function minuteToStatus(minute) {
+  if (minute >= 90) return 'FT';
+  if (minute >= 45) return 'HT';
+  return 'LIVE';
+}
+
 export function buildLiveDoc(eventId, stats, status, nowMs) {
   const day = new Date(nowMs);
   const expireAt = new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate(), 23, 59, 59));
