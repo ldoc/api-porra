@@ -18,7 +18,7 @@ import { validateFasesFechas } from './api/fasesFechas.js';
 import { validateMessage } from './api/messageValidation.js';
 import { computeWeakEtag, etagMatches } from './api/etag.js';
 import { parseSinceParam } from './api/matchStatsFilter.js';
-import { calculateUserStandings } from './api/standings.js';
+import { calculateUserStandings, getLigaMatchIds } from './api/standings.js';
 import { guestReadFilter, canSeeGuests, bypassesGameLocks, guestEditingEnabled } from './api/guest.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -1001,17 +1001,10 @@ const server = http.createServer(async (req, res) => {
     const predictions = user.predictions || {};
     const gameConfig = await GameConfig.findById('gameConfig');
     const totalMatches = gameConfig?.tournament?.totalMatches || 144;
-    let ligaMatchIds = null;
-    try {
-      const calendar = await import('./data/sofascore/calendar.json', { assert: { type: 'json' } })
-        .then(m => m.default);
-      ligaMatchIds = new Set(calendar.filter(m => m.fase === 'liga').map(m => String(m.id)));
-    } catch {
-      ligaMatchIds = null;
-    }
+    const ligaMatchIds = getLigaMatchIds();
     let filledCount = 0;
     for (const matchId of Object.keys(predictions)) {
-      if (ligaMatchIds && !ligaMatchIds.has(String(matchId))) continue;
+      if (!ligaMatchIds.has(String(matchId))) continue;
       const p = predictions[matchId];
       if (p && typeof p.home === 'number' && typeof p.away === 'number') {
         filledCount++;

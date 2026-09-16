@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { calculateUserStandings, compareStandingsTeams } from '../api/standings.js';
+import { calculateUserStandings, getLigaMatchIds, compareStandingsTeams } from '../api/standings.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -52,4 +52,10 @@ test('compareStandingsTeams: desempata alfabéticamente tras empate en los 9 cri
   assert.ok(compareStandingsTeams(t(1), t(2), nameMap) > 0, 'Zeta detrás de Alpha');
   assert.ok(compareStandingsTeams(t(2), t(1), nameMap) < 0, 'Alpha delante de Zeta');
   assert.strictEqual(compareStandingsTeams(t(1), t(1), nameMap), 0, 'mismo equipo → 0');
+});
+
+test('getLigaMatchIds contiene solo partidos de fase liga', () => {
+  const ids = getLigaMatchIds();
+  assert.ok(ids instanceof Set);
+  assert.strictEqual(ids.size, 144);
 });
