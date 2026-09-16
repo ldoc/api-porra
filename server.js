@@ -906,7 +906,7 @@ const server = http.createServer(async (req, res) => {
       sendJson(req, res, 404, { ok: false, error: 'Usuario no encontrado' });
       return;
     }
-    const guestUser = bypassesGameLocks(user);
+    const guestBypass = bypassesGameLocks(user, await getGuestEditingEnabled());
     // Validar que solo se modifiquen partidos de la fase actual
     const fase = await getFaseJuego();
     const faseMap = {
@@ -926,13 +926,13 @@ const server = http.createServer(async (req, res) => {
     };
     const currentFase = faseMap[fase] || 'liga';
 
-    if (!guestUser && user.predictionsConfirmed && currentFase === 'liga') {
+    if (user.predictionsConfirmed && currentFase === 'liga') {
       sendJson(req, res, 403, { ok: false, error: 'Tus pronósticos de liga ya están confirmados y no se pueden modificar' });
       return;
     }
 
     // Solo validar si no es fase pretemporada (en pretemporada se guardan predicciones de liga)
-    if (!guestUser && fase !== 'FASE_PRETEMPORADA') {
+    if (!guestBypass && fase !== 'FASE_PRETEMPORADA') {
       let calendar;
       try {
         calendar = await import('./data/sofascore/calendar.json', { assert: { type: 'json' } })
@@ -988,12 +988,9 @@ const server = http.createServer(async (req, res) => {
       sendJson(req, res, 404, { ok: false, error: 'Usuario no encontrado' });
       return;
     }
-    if (bypassesGameLocks(user)) {
-      sendJson(req, res, 200, { ok: true, isGuest: true });
-      return;
-    }
     const currentPhase = await getFaseJuego();
-    if (!bypassesGameLocks(user) && currentPhase !== 'FASE_PRETEMPORADA') {
+    const guestBypass = bypassesGameLocks(user, await getGuestEditingEnabled());
+    if (!guestBypass && currentPhase !== 'FASE_PRETEMPORADA') {
       sendJson(req, res, 409, { ok: false, error: 'La confirmación solo está disponible en FASE_PRETEMPORADA' });
       return;
     }
@@ -1067,7 +1064,8 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     const fase = await getFaseJuego();
-    if (!bypassesGameLocks(finalUser) && fase !== 'FASE_PRETEMPORADA') {
+    const guestBypass = bypassesGameLocks(finalUser, await getGuestEditingEnabled());
+    if (!guestBypass && fase !== 'FASE_PRETEMPORADA') {
       sendJson(req, res, 403, { ok: false, error: 'Los pronosticos de eliminatorias estan bloqueados' });
       return;
     }
@@ -1090,7 +1088,7 @@ const server = http.createServer(async (req, res) => {
     // Validación: los 8 primeros clasificados de la clasificación pronosticada no pueden ir a deciseisavos
     const fp = body.finalPredictions;
     const userForValidation = await User.findOne({ username: auth.username });
-    if (!bypassesGameLocks(userForValidation) && !userForValidation?.predictionsConfirmed) {
+    if (!guestBypass && !userForValidation?.predictionsConfirmed) {
       sendJson(req, res, 403, { ok: false, error: 'Debes confirmar tus pronósticos de liga antes de guardar el cuadro de eliminatorias' });
       return;
     }
@@ -1207,7 +1205,8 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     const fase = await getFaseJuego();
-    if (!bypassesGameLocks(squadUser) && fase !== 'FASE_PRETEMPORADA') {
+    const guestBypass = bypassesGameLocks(squadUser, await getGuestEditingEnabled());
+    if (!guestBypass && fase !== 'FASE_PRETEMPORADA') {
       sendJson(req, res, 403, { ok: false, error: 'La plantilla esta bloqueada' });
       return;
     }

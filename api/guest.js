@@ -15,8 +15,8 @@ export function isGuestRegistrationAllowed(invitation, faseJuego) {
   return !faseJuego || faseJuego === 'FASE_PRETEMPORADA';
 }
 
-export function bypassesGameLocks(user) {
-  return isGuest(user);
+export function bypassesGameLocks(user, guestEditingEnabled) {
+  return isGuest(user) && guestEditingEnabled === true;
 }
 
 export function guestEditingEnabled(config) {
