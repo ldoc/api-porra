@@ -1001,8 +1001,17 @@ const server = http.createServer(async (req, res) => {
     const predictions = user.predictions || {};
     const gameConfig = await GameConfig.findById('gameConfig');
     const totalMatches = gameConfig?.tournament?.totalMatches || 144;
+    let ligaMatchIds = null;
+    try {
+      const calendar = await import('./data/sofascore/calendar.json', { assert: { type: 'json' } })
+        .then(m => m.default);
+      ligaMatchIds = new Set(calendar.filter(m => m.fase === 'liga').map(m => String(m.id)));
+    } catch {
+      ligaMatchIds = null;
+    }
     let filledCount = 0;
     for (const matchId of Object.keys(predictions)) {
+      if (ligaMatchIds && !ligaMatchIds.has(String(matchId))) continue;
       const p = predictions[matchId];
       if (p && typeof p.home === 'number' && typeof p.away === 'number') {
         filledCount++;
