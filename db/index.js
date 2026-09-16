@@ -3,3 +3,4 @@ export { default as User } from './models/User.js';
 export { default as Invitation } from './models/Invitation.js';
 export { default as MatchStats } from './models/MatchStats.js';
 export { default as Message } from './models/Message.js';
+export { default as LiveMatch } from './models/LiveMatch.js';

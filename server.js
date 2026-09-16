@@ -20,6 +20,7 @@ import { computeWeakEtag, etagMatches } from './api/etag.js';
 import { parseSinceParam } from './api/matchStatsFilter.js';
 import { calculateUserStandings, getLigaMatchIds, getMatchFaseMap } from './api/standings.js';
 import { guestReadFilter, canSeeGuests, bypassesGameLocks, guestEditingEnabled } from './api/guest.js';
+import { getLiveRefreshSecs } from './api/live.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -369,7 +370,8 @@ const server = http.createServer(async (req, res) => {
             squadFormation: { G: 3, D: 8, M: 8, F: 6 },
             fasesFechas: {},
             maintenance: { enabled: false, message: 'Web en mantenimiento. Volvemos pronto.' },
-            guestEditingEnabled: true
+            guestEditingEnabled: true,
+            liveRefreshSecs: 60
           }
         });
         return;
@@ -384,7 +386,8 @@ const server = http.createServer(async (req, res) => {
           squadFormation: config.tournament.squadFormation,
           fasesFechas: config.fasesFechas || {},
           maintenance: config.maintenance || { enabled: false, message: 'Web en mantenimiento. Volvemos pronto.' },
-          guestEditingEnabled: guestEditingEnabled(config)
+          guestEditingEnabled: guestEditingEnabled(config),
+          liveRefreshSecs: getLiveRefreshSecs(config)
         }
       });
     } catch (e) {

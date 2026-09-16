@@ -24,6 +24,7 @@ const gameConfigSchema = new mongoose.Schema({
   guestEditing: {
     enabled: { type: Boolean, default: true }
   },
+  liveRefreshSecs: { type: Number, default: 60 },
   updatedBy: { type: String },
   updatedAt: { type: Date }
 }, {
