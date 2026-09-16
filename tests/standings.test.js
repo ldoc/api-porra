@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { calculateUserStandings, getLigaMatchIds, compareStandingsTeams } from '../api/standings.js';
+import { calculateUserStandings, getLigaMatchIds, getMatchFaseMap, compareStandingsTeams } from '../api/standings.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -58,4 +58,13 @@ test('getLigaMatchIds contiene solo partidos de fase liga', () => {
   const ids = getLigaMatchIds();
   assert.ok(ids instanceof Set);
   assert.strictEqual(ids.size, 144);
+});
+
+test('getMatchFaseMap mapea cada eventId a su fase', () => {
+  const map = getMatchFaseMap();
+  const calendar = loadCalendar();
+  assert.strictEqual(Object.keys(map).length, calendar.length);
+  assert.strictEqual(Object.values(map).filter(f => f === 'liga').length, 144);
+  const sample = calendar[0];
+  assert.strictEqual(map[String(sample.id)], sample.fase);
 });

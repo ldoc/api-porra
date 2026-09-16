@@ -18,7 +18,7 @@ import { validateFasesFechas } from './api/fasesFechas.js';
 import { validateMessage } from './api/messageValidation.js';
 import { computeWeakEtag, etagMatches } from './api/etag.js';
 import { parseSinceParam } from './api/matchStatsFilter.js';
-import { calculateUserStandings, getLigaMatchIds } from './api/standings.js';
+import { calculateUserStandings, getLigaMatchIds, getMatchFaseMap } from './api/standings.js';
 import { guestReadFilter, canSeeGuests, bypassesGameLocks, guestEditingEnabled } from './api/guest.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -933,20 +933,9 @@ const server = http.createServer(async (req, res) => {
 
     // Solo validar si no es fase pretemporada (en pretemporada se guardan predicciones de liga)
     if (!guestBypass && fase !== 'FASE_PRETEMPORADA') {
-      let calendar;
-      try {
-        calendar = await import('./data/sofascore/calendar.json', { assert: { type: 'json' } })
-          .then(m => m.default);
-      } catch {
-        calendar = null;
-      }
+      const matchFaseMap = getMatchFaseMap();
 
-      if (calendar) {
-        const matchFaseMap = {};
-        for (const match of calendar) {
-          matchFaseMap[match.id] = match.fase;
-        }
-
+      if (Object.keys(matchFaseMap).length > 0) {
         const existingPredictions = user.predictions || {};
 
         for (const [eventId, pred] of Object.entries(body.predictions)) {
@@ -1343,16 +1332,8 @@ const server = http.createServer(async (req, res) => {
       // Construir mapa eventId → fase para filtrar predicciones de la fase oculta
       let matchFaseMap = null;
       if (hiddenFase) {
-        try {
-          const calendar = await import('./data/sofascore/calendar.json', { assert: { type: 'json' } })
-            .then(m => m.default);
-          matchFaseMap = {};
-          for (const match of calendar) {
-            matchFaseMap[match.id] = match.fase;
-          }
-        } catch {
-          matchFaseMap = null;
-        }
+        const map = getMatchFaseMap();
+        matchFaseMap = Object.keys(map).length > 0 ? map : null;
       }
 
       const predictions = {};

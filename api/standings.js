@@ -21,6 +21,15 @@ export function getLigaMatchIds() {
   return new Set(calendar.filter(m => m.fase === 'liga').map(m => String(m.id)));
 }
 
+export function getMatchFaseMap() {
+  const calendar = loadCalendar() || [];
+  const map = {};
+  for (const match of calendar) {
+    map[String(match.id)] = match.fase;
+  }
+  return map;
+}
+
 let _teamsCache = null;
 function loadTeams() {
   if (_teamsCache) return _teamsCache;
