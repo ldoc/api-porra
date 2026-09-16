@@ -19,7 +19,7 @@ import { validateMessage } from './api/messageValidation.js';
 import { computeWeakEtag, etagMatches } from './api/etag.js';
 import { parseSinceParam } from './api/matchStatsFilter.js';
 import { calculateUserStandings } from './api/standings.js';
-import { guestReadFilter, canSeeGuests, bypassesGameLocks } from './api/guest.js';
+import { guestReadFilter, canSeeGuests, bypassesGameLocks, guestEditingEnabled } from './api/guest.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -40,6 +40,16 @@ async function getFaseJuego() {
   } catch (error) {
     console.error('Error obteniendo fase del juego:', error);
     return 'FASE_PRETEMPORADA';
+  }
+}
+
+async function getGuestEditingEnabled() {
+  try {
+    const config = await GameConfig.findById('gameConfig');
+    return guestEditingEnabled(config);
+  } catch (error) {
+    console.error('Error obteniendo guestEditing:', error);
+    return true;
   }
 }
 
@@ -358,7 +368,8 @@ const server = http.createServer(async (req, res) => {
             squadSize: 25,
             squadFormation: { G: 3, D: 8, M: 8, F: 6 },
             fasesFechas: {},
-            maintenance: { enabled: false, message: 'Web en mantenimiento. Volvemos pronto.' }
+            maintenance: { enabled: false, message: 'Web en mantenimiento. Volvemos pronto.' },
+            guestEditingEnabled: true
           }
         });
         return;
@@ -372,7 +383,8 @@ const server = http.createServer(async (req, res) => {
           squadSize: config.tournament.squadSize,
           squadFormation: config.tournament.squadFormation,
           fasesFechas: config.fasesFechas || {},
-          maintenance: config.maintenance || { enabled: false, message: 'Web en mantenimiento. Volvemos pronto.' }
+          maintenance: config.maintenance || { enabled: false, message: 'Web en mantenimiento. Volvemos pronto.' },
+          guestEditingEnabled: guestEditingEnabled(config)
         }
       });
     } catch (e) {
@@ -536,6 +548,42 @@ const server = http.createServer(async (req, res) => {
       });
     } catch (error) {
       console.error('Error actualizando mantenimiento:', error);
+      sendJson(req, res, 500, { ok: false, error: 'Error interno del servidor' });
+    }
+    return;
+  }
+
+  // Endpoint Admin: Activar/desactivar la edición de invitados
+  if (reqUrl.pathname === '/api/admin/guest-editing' && req.method === 'PUT') {
+    const admin = await verifyAdmin(req);
+    if (!admin) {
+      sendJson(req, res, 403, { ok: false, error: 'Acceso denegado. Se requieren permisos de administrador.' });
+      return;
+    }
+    const body = await parseBody(req);
+    if (!body || body.__error) {
+      const status = body?.__error?.status || 400;
+      sendJson(req, res, status, { ok: false, error: body?.__error?.error || 'Body inválido' });
+      return;
+    }
+    if (typeof body.enabled !== 'boolean') {
+      sendJson(req, res, 400, { ok: false, error: 'Body inválido, se requiere enabled (boolean)' });
+      return;
+    }
+    try {
+      const config = await GameConfig.findByIdAndUpdate(
+        'gameConfig',
+        { $set: { 'guestEditing.enabled': body.enabled, updatedBy: admin.username, updatedAt: new Date() } },
+        { new: true, upsert: true }
+      );
+      sendJson(req, res, 200, {
+        ok: true,
+        guestEditingEnabled: config.guestEditing?.enabled !== false,
+        updatedBy: config.updatedBy,
+        updatedAt: config.updatedAt
+      });
+    } catch (error) {
+      console.error('Error actualizando edición de invitados:', error);
       sendJson(req, res, 500, { ok: false, error: 'Error interno del servidor' });
     }
     return;

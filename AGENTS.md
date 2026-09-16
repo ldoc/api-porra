@@ -163,10 +163,12 @@ api-porra/
 | PUT    | `/api/admin/config`           | Actualizar configuración completa (faseJuego, tournament) |
 | PUT    | `/api/admin/fases-fechas`     | Actualizar fechas de inicio/fin de las fases (fasesFechas) |
 | PUT    | `/api/admin/maintenance`      | Activar/desactivar mantenimiento (`{enabled:boolean, message:string max 500}`) |
+| PUT    | `/api/admin/guest-editing`    | Activar/desactivar edición de invitados (body `{enabled:boolean}`) |
 | GET    | `/api/admin/progress`         | Progreso de jugadores (panel admin)            |
 
 > `GameConfig` guarda un campo `fasesFechas` (`Object`, default `{}`) con las fechas de inicio/fin de cada fase: `{ FASE_X: { inicio, fin } }`, donde cada fecha es un string ISO o `null` (desconocida). `PUT /api/admin/fases-fechas` valida que las claves sean fases válidas (de las 13 definidas en `data/fases.json`) y que `inicio < fin` (módulo `api/fasesFechas.js`). `GET /api/config` lo devuelve dentro de `config.fasesFechas`.
 > `GameConfig.maintenance` (`{enabled:Boolean default false, message:String default 'Web en mantenimiento...'}`) controla el bloqueo global. Middleware tras `globalLimiter` en `server.js` responde `503 MAINTENANCE` a todo `/api/*` no-allowlisted si `enabled && !verifyAdmin(req)`. Allowlist: `/api/config`, `/api/auth/login`, `/`, `/api/admin/maintenance`.
+> `GameConfig.guestEditing` (`{enabled:Boolean default true}`) controla si los usuarios con `isGuest:true` pueden editar. `GET /api/config` lo expone como `config.guestEditingEnabled` y `PUT /api/admin/guest-editing` lo muta (solo admin). El helper puro `guestEditingEnabled(config)` (`api/guest.js`) devuelve `true` salvo `enabled:false` explícito. Solo afecta a invitados; los usuarios normales no cambian de comportamiento.
 
 ### Modelo de Datos de Usuario (auth)
 

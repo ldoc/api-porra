@@ -5,7 +5,8 @@ import {
   canSeeGuests,
   guestReadFilter,
   isGuestRegistrationAllowed,
-  bypassesGameLocks
+  bypassesGameLocks,
+  guestEditingEnabled
 } from '../api/guest.js';
 
 test('isGuest solo es true con isGuest:true', () => {
@@ -41,4 +42,12 @@ test('bypassesGameLocks: true solo para invitados', () => {
   assert.strictEqual(bypassesGameLocks({ isGuest: true }), true);
   assert.strictEqual(bypassesGameLocks({ isGuest: false }), false);
   assert.strictEqual(bypassesGameLocks({}), false);
+});
+
+test('guestEditingEnabled: true salvo enabled:false explícito', () => {
+  assert.strictEqual(guestEditingEnabled({ guestEditing: { enabled: true } }), true);
+  assert.strictEqual(guestEditingEnabled({ guestEditing: { enabled: false } }), false);
+  assert.strictEqual(guestEditingEnabled({ guestEditing: {} }), true);
+  assert.strictEqual(guestEditingEnabled({}), true);
+  assert.strictEqual(guestEditingEnabled(null), true);
 });

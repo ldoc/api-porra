@@ -18,3 +18,7 @@ export function isGuestRegistrationAllowed(invitation, faseJuego) {
 export function bypassesGameLocks(user) {
   return isGuest(user);
 }
+
+export function guestEditingEnabled(config) {
+  return config?.guestEditing?.enabled !== false;
+}

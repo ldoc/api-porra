@@ -21,6 +21,9 @@ const gameConfigSchema = new mongoose.Schema({
     enabled: { type: Boolean, default: false },
     message: { type: String, default: 'Web en mantenimiento. Volvemos pronto.' }
   },
+  guestEditing: {
+    enabled: { type: Boolean, default: true }
+  },
   updatedBy: { type: String },
   updatedAt: { type: Date }
 }, {
