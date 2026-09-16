@@ -8,7 +8,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
-import { connectDB, User, Invitation, MatchStats, Message } from './db/index.js';
+import { connectDB, User, Invitation, MatchStats, Message, LiveMatch } from './db/index.js';
 import GameConfig from './db/models/GameConfig.js';
 import { register, login, getProfile, saveProfile, getTakenAvatars, getAllPlayers, getSquad, saveSquad, changePassword } from './api/auth.js';
 import { scrapMatchStats } from './scripts/matchStats.js';
@@ -20,7 +20,7 @@ import { computeWeakEtag, etagMatches } from './api/etag.js';
 import { parseSinceParam } from './api/matchStatsFilter.js';
 import { calculateUserStandings, getLigaMatchIds, getMatchFaseMap } from './api/standings.js';
 import { guestReadFilter, canSeeGuests, bypassesGameLocks, guestEditingEnabled } from './api/guest.js';
-import { getLiveRefreshSecs } from './api/live.js';
+import { getLiveRefreshSecs, buildLiveResponse } from './api/live.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1263,6 +1263,19 @@ const server = http.createServer(async (req, res) => {
       const status = e.message === 'NOT_FOUND' ? 404 : 500;
       const error = e.message === 'NOT_FOUND' ? 'Partido no encontrado en Sofascore' : 'Error al obtener estadísticas del partido';
       sendJson(req, res, status, { ok: false, error });
+    }
+    return;
+  }
+
+  // Endpoint: partidos live del día (colección temporal con TTL)
+  if (reqUrl.pathname === '/api/live' && req.method === 'GET') {
+    const phaseCheck = await checkPhaseConsistency(req, res);
+    if (!phaseCheck) return;
+    try {
+      const docs = await LiveMatch.find({}).sort({ eventId: 1 }).lean();
+      sendJson(req, res, 200, buildLiveResponse(docs));
+    } catch (e) {
+      sendJson(req, res, 500, { ok: false, error: 'Error al obtener partidos live' });
     }
     return;
   }
