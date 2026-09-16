@@ -16,3 +16,5 @@ opencode.json
 # PDF generation
 scripts/generatePDF.js
 api/pdf/
+
+.worktrees/
