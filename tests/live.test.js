@@ -55,6 +55,14 @@ test('buildLiveResponse ordena por eventId y serverTime es el max', () => {
   assert.deepEqual(buildLiveResponse([]), { ok: true, liveMatches: [], serverTime: null });
 });
 
+test('buildLiveDoc incluye minute y lo deja null si falta', () => {
+  const conMinuto = buildLiveDoc(1, { a: 1 }, 'LIVE', nowMs, 37);
+  assert.equal(conMinuto.minute, 37);
+  assert.equal(conMinuto.expireAt.toISOString(), '2026-09-16T23:59:59.000Z');
+  const sinMinuto = buildLiveDoc(1, { a: 1 }, 'HT', nowMs);
+  assert.equal(sinMinuto.minute, null);
+});
+
 test('liveStatusFromSofascore mapea estados de Sofascore', () => {
   assert.equal(liveStatusFromSofascore('inprogress'), 'LIVE');
   assert.equal(liveStatusFromSofascore('halftime'), 'HT');

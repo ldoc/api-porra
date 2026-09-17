@@ -26,10 +26,10 @@ export function liveStatusFromSofascore(statusType) {
   return null;
 }
 
-export function buildLiveDoc(eventId, stats, status, nowMs) {
+export function buildLiveDoc(eventId, stats, status, nowMs, minute = null) {
   const day = new Date(nowMs);
   const expireAt = new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate(), 23, 59, 59));
-  return { eventId, stats, status, lastUpdated: new Date(nowMs), expireAt };
+  return { eventId, stats, status, minute, lastUpdated: new Date(nowMs), expireAt };
 }
 
 export function selectLiveMatches(calendar, nowMs) {
