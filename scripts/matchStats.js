@@ -135,7 +135,7 @@ export function buildTeamStats(goles, tandaPenaltis) {
     return stats;
 }
 
-export async function scrapMatchStats(eventId) {
+export async function scrapMatchFull(eventId) {
     const eventUrl = `https://www.sofascore.com/api/v1/event/${eventId}`;
     const lineupsUrl = `https://www.sofascore.com/api/v1/event/${eventId}/lineups`;
     const incidentsUrl = `https://www.sofascore.com/api/v1/event/${eventId}/incidents`;
@@ -213,9 +213,20 @@ export async function scrapMatchStats(eventId) {
     const homeTeamStats = buildTeamStats(homeGoals, ev.homeScore?.penalties);
     const awayTeamStats = buildTeamStats(awayGoals, ev.awayScore?.penalties);
 
-    return {
+    const stats = {
         [homeId]: homeTeamStats,
         [awayId]: awayTeamStats,
         jugadores: allPlayers
     };
+
+    return {
+        stats,
+        statusType: ev.status?.type ?? null,
+        minute: ev.time?.current ?? null
+    };
+}
+
+export async function scrapMatchStats(eventId) {
+    const { stats } = await scrapMatchFull(eventId);
+    return stats;
 }
