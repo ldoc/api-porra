@@ -371,7 +371,7 @@ const server = http.createServer(async (req, res) => {
             fasesFechas: {},
             maintenance: { enabled: false, message: 'Web en mantenimiento. Volvemos pronto.' },
             guestEditingEnabled: true,
-            liveRefreshSecs: 60
+            liveRefreshSecs: 30
           }
         });
         return;

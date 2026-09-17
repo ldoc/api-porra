@@ -32,7 +32,7 @@ async function tick() {
       await LiveMatch.findOneAndUpdate(
         { eventId: m.id },
         buildLiveDoc(m.id, stats, status, Date.now(), minute),
-        { upsert: true, new: true }
+        { upsert: true, returnDocument: 'after' }
       );
       ok++;
     } catch (e) {

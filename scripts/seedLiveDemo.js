@@ -119,7 +119,7 @@ async function main() {
       await LiveMatch.findOneAndUpdate(
         { eventId: m.id },
         { eventId: m.id, stats, status: statusFor(min), lastUpdated: new Date(), expireAt: new Date(new Date().setUTCHours(23, 59, 59, 0)) },
-        { upsert: true, new: true }
+        { upsert: true, returnDocument: 'after' }
       );
     }
   }

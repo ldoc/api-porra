@@ -6,7 +6,7 @@ const liveMatchSchema = new mongoose.Schema({
   status: { type: String, enum: ['LIVE', 'HT', 'FT'], default: 'LIVE' },
   minute: { type: Number, default: null },
   lastUpdated: { type: Date, default: Date.now, index: -1 },
-  expireAt: { type: Date, required: true, index: true }
+  expireAt: { type: Date, required: true }
 }, { collection: 'livematches', timestamps: false });
 
 liveMatchSchema.index({ expireAt: 1 }, { expireAfterSeconds: 0 });
