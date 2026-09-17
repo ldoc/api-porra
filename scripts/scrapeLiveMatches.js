@@ -56,6 +56,6 @@ process.on('SIGINT', () => {
 
 console.log(`Scrapeo live cada ${INTERVAL_MS / 1000}s. Ctrl+C para parar.`);
 while (true) {
-  await tick();
+  try { await tick(); } catch (e) { console.error(`${stamp()} tick falló: ${e.message}`); }
   await sleep(INTERVAL_MS);
 }
