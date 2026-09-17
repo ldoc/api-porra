@@ -491,6 +491,13 @@ import { scrapMatchStats } from './scripts/matchStats.js';
 const stats = await scrapMatchStats(eventId);
 // Returns: { [homeTeamId]: { goles, tandaPenaltis }, [awayTeamId]: { goles, tandaPenaltis }, jugadores: [...] }
 // Formato idéntico al que se guarda en Mongo y devuelve GET /api/match-stats/:eventId
+
+import { scrapMatchFull } from './scripts/matchStats.js';
+
+// Scraping completo de un partido: stats + estado crudo de Sofascore + minuto
+const { stats, statusType, minute } = await scrapMatchFull(eventId);
+// statusType: 'inprogress' | 'halftime' | 'finished' | 'notstarted' | ...
+// Traducir con liveStatusFromSofascore(statusType) -> 'LIVE' | 'HT' | 'FT' | null
 ```
 
 ## Seguridad
@@ -673,3 +680,4 @@ Los usuarios predicen el cuadro completo de eliminatorias de la Champions League
 ## Notas Importantes
 
 - Los scripts de scraping (`scripts/`) usan headers de Chrome para evitar bloqueos de Sofascore.
+- **Scrapeo live periódico (local)**: `node --env-file=.env scripts/scrapeLiveMatches.js` rellena la colección `livematches` cada 30s (ventana `[inicio−15min, inicio+120min]`). Corre en local y escribe en Mongo; usar el `MONGODB_URI` de `/prod` para que lo vea `porra-spa` en producción. `--once` hace una sola pasada. `Ctrl+C` lo para. El TTL de Mongo borra los docs a fin de día UTC.
