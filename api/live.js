@@ -19,6 +19,13 @@ export function minuteToStatus(minute) {
   return 'LIVE';
 }
 
+export function liveStatusFromSofascore(statusType) {
+  if (statusType === 'halftime') return 'HT';
+  if (statusType === 'finished') return 'FT';
+  if (statusType === 'inprogress') return 'LIVE';
+  return null;
+}
+
 export function buildLiveDoc(eventId, stats, status, nowMs) {
   const day = new Date(nowMs);
   const expireAt = new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate(), 23, 59, 59));

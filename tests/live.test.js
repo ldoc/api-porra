@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isLiveWindow, getLiveRefreshSecs, buildLiveDoc, selectLiveMatches, buildLiveResponse, minuteToStatus } from '../api/live.js';
+import { isLiveWindow, getLiveRefreshSecs, buildLiveDoc, selectLiveMatches, buildLiveResponse, minuteToStatus, liveStatusFromSofascore } from '../api/live.js';
 
 const H = 3600;
 const nowMs = Date.parse('2026-09-16T20:00:00Z');
@@ -53,4 +53,14 @@ test('buildLiveResponse ordena por eventId y serverTime es el max', () => {
   assert.deepEqual(res.liveMatches.map(d => d.eventId), [3, 9]);
   assert.equal(res.serverTime, '2026-09-16T20:05:00.000Z');
   assert.deepEqual(buildLiveResponse([]), { ok: true, liveMatches: [], serverTime: null });
+});
+
+test('liveStatusFromSofascore mapea estados de Sofascore', () => {
+  assert.equal(liveStatusFromSofascore('inprogress'), 'LIVE');
+  assert.equal(liveStatusFromSofascore('halftime'), 'HT');
+  assert.equal(liveStatusFromSofascore('finished'), 'FT');
+  assert.equal(liveStatusFromSofascore('notstarted'), null);
+  assert.equal(liveStatusFromSofascore('postponed'), null);
+  assert.equal(liveStatusFromSofascore('canceled'), null);
+  assert.equal(liveStatusFromSofascore(undefined), null);
 });
