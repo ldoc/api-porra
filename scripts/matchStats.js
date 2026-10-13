@@ -1,4 +1,5 @@
 import { fetchSofascore } from './sofascoreHttp.js';
+import { liveMinute } from '../api/live.js';
 
 function processPlayer(playerEntry, teamId, assistsMap) {
     const p = playerEntry.player;
@@ -164,7 +165,7 @@ export async function scrapMatchFull(eventId) {
     return {
         stats,
         statusType: ev.status?.type ?? null,
-        minute: ev.time?.current ?? null
+        minute: liveMinute(ev.lastPeriod, ev.time?.currentPeriodStartTimestamp, Math.floor(Date.now() / 1000))
     };
 }
 

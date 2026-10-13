@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isLiveWindow, getLiveRefreshSecs, buildLiveDoc, selectLiveMatches, buildLiveResponse, minuteToStatus, liveStatusFromSofascore } from '../api/live.js';
+import { isLiveWindow, getLiveRefreshSecs, buildLiveDoc, selectLiveMatches, buildLiveResponse, minuteToStatus, liveStatusFromSofascore, liveMinute } from '../api/live.js';
 
 const H = 3600;
 const nowMs = Date.parse('2026-09-16T20:00:00Z');
@@ -78,4 +78,13 @@ test('buildLiveDoc con estado NS deja minute null', () => {
   const doc = buildLiveDoc(1, { jugadores: [] }, 'NS', nowMs, null);
   assert.equal(doc.status, 'NS');
   assert.equal(doc.minute, null);
+});
+
+test('liveMinute deriva el minuto por periodo', () => {
+  const t0 = 1791910027;
+  assert.equal(liveMinute('period1', t0, t0), 1);
+  assert.equal(liveMinute('period1', t0, t0 + 29 * 60), 30);
+  assert.equal(liveMinute('period2', t0, t0 + 5 * 60), 51);
+  assert.equal(liveMinute('halftime', t0, t0), null);
+  assert.equal(liveMinute('period1', undefined, t0), null);
 });

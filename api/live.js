@@ -38,6 +38,15 @@ export function selectLiveMatches(calendar, nowMs) {
   return (calendar || []).filter(m => isLiveWindow(m.fecha, nowMs));
 }
 
+const PERIOD_BASE = { period1: 0, period2: 45, period3: 90, period4: 105 };
+
+export function liveMinute(lastPeriod, periodStartTs, nowSecs) {
+  const base = PERIOD_BASE[lastPeriod];
+  if (base === undefined) return null;
+  if (!Number.isFinite(periodStartTs) || !Number.isFinite(nowSecs)) return null;
+  return base + Math.floor((nowSecs - periodStartTs) / 60) + 1;
+}
+
 export function buildLiveResponse(docs) {
   const liveMatches = [...(docs || [])].sort((a, b) => a.eventId - b.eventId);
   const max = liveMatches.reduce((acc, d) => {
