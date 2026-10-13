@@ -172,6 +172,7 @@ export async function scrapMatchFull(eventId) {
     return {
         stats,
         statusType: ev.status?.type ?? null,
+        statusCode: ev.status?.code ?? null,
         minute: liveMinute(ev.lastPeriod, ev.time?.currentPeriodStartTimestamp, Math.floor(Date.now() / 1000))
     };
 }

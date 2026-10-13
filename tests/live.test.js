@@ -74,6 +74,13 @@ test('liveStatusFromSofascore mapea estados de Sofascore', () => {
   assert.equal(liveStatusFromSofascore(undefined), null);
 });
 
+test('liveStatusFromSofascore detecta el descanso por statusCode 31', () => {
+  assert.equal(liveStatusFromSofascore('inprogress', 31), 'HT');
+  assert.equal(liveStatusFromSofascore('inprogress', 6), 'LIVE');
+  assert.equal(liveStatusFromSofascore('finished', 100), 'FT');
+  assert.equal(liveStatusFromSofascore('notstarted', 0), 'NS');
+});
+
 test('buildLiveDoc con estado NS deja minute null', () => {
   const doc = buildLiveDoc(1, { jugadores: [] }, 'NS', nowMs, null);
   assert.equal(doc.status, 'NS');

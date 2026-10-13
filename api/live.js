@@ -19,11 +19,10 @@ export function minuteToStatus(minute) {
   return 'LIVE';
 }
 
-export function liveStatusFromSofascore(statusType) {
-  if (statusType === 'notstarted') return 'NS';
-  if (statusType === 'willsoonstart') return 'NS';
-  if (statusType === 'halftime') return 'HT';
-  if (statusType === 'finished') return 'FT';
+export function liveStatusFromSofascore(statusType, statusCode = null) {
+  if (statusCode === 31 || statusType === 'halftime') return 'HT';
+  if (statusCode === 100 || statusType === 'finished') return 'FT';
+  if (statusType === 'notstarted' || statusType === 'willsoonstart') return 'NS';
   if (statusType === 'inprogress') return 'LIVE';
   return null;
 }

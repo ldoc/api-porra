@@ -26,8 +26,8 @@ async function tick() {
   for (const m of live) {
     if (finished.has(m.id)) continue;
     try {
-      const { stats, statusType, minute } = await scrapMatchFull(m.id);
-      const status = liveStatusFromSofascore(statusType);
+      const { stats, statusType, statusCode, minute } = await scrapMatchFull(m.id);
+      const status = liveStatusFromSofascore(statusType, statusCode);
       if (!status) continue;
       await LiveMatch.findOneAndUpdate(
         { eventId: m.id },
