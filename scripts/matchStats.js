@@ -86,7 +86,7 @@ export async function scrapMatchFull(eventId) {
 
     const [eventData, lineupsData, incidentsData, fantasyData] = await Promise.all([
         fetchSofascore(eventUrl),
-        fetchSofascore(lineupsUrl),
+        fetchSofascore(lineupsUrl).catch(() => null),
         fetchSofascore(incidentsUrl).catch(() => null),
         fetchSofascore(fantasyUrl).catch(() => null)
     ]);
@@ -107,8 +107,8 @@ export async function scrapMatchFull(eventId) {
     const homeId = String(homeTeamId);
     const awayId = String(awayTeamId);
 
-    const homePlayers = (lineupsData.home?.players || []).map(p => processPlayer(p, homeTeamId, assistsMap));
-    const awayPlayers = (lineupsData.away?.players || []).map(p => processPlayer(p, awayTeamId, assistsMap));
+    const homePlayers = (lineupsData?.home?.players || []).map(p => processPlayer(p, homeTeamId, assistsMap));
+    const awayPlayers = (lineupsData?.away?.players || []).map(p => processPlayer(p, awayTeamId, assistsMap));
 
     const allPlayers = [...homePlayers, ...awayPlayers];
 
