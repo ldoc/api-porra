@@ -84,12 +84,20 @@ export async function scrapMatchFull(eventId) {
     const incidentsUrl = `https://www.sofascore.com/api/v1/event/${eventId}/incidents`;
     const fantasyUrl = `https://www.sofascore.com/api/v1/fantasy/event/${eventId}`;
 
-    const [eventData, lineupsData, incidentsData, fantasyData] = await Promise.all([
+    const [eventData, incidentsData, fantasyData] = await Promise.all([
         fetchSofascore(eventUrl),
-        fetchSofascore(lineupsUrl).catch(() => null),
         fetchSofascore(incidentsUrl).catch(() => null),
         fetchSofascore(fantasyUrl).catch(() => null)
     ]);
+
+    const ev = eventData.event;
+    const notStarted = ev.status?.type === 'notstarted' || ev.status?.type === 'willsoonstart';
+    let lineupsData = null;
+    try {
+        lineupsData = await fetchSofascore(lineupsUrl);
+    } catch (e) {
+        if (!notStarted) throw e;
+    }
 
     const assistsMap = {};
     if (fantasyData?.playerStatistics) {
@@ -101,7 +109,6 @@ export async function scrapMatchFull(eventId) {
         }
     }
 
-    const ev = eventData.event;
     const homeTeamId = ev.homeTeam?.id;
     const awayTeamId = ev.awayTeam?.id;
     const homeId = String(homeTeamId);
