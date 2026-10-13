@@ -680,4 +680,4 @@ Los usuarios predicen el cuadro completo de eliminatorias de la Champions League
 ## Notas Importantes
 
 - Los scripts de scraping (`scripts/`) usan headers de Chrome para evitar bloqueos de Sofascore.
-- **Scrapeo live periódico (local)**: `node --env-file=.env scripts/scrapeLiveMatches.js` rellena la colección `livematches` cada 30s (ventana `[inicio−15min, inicio+120min]`). Corre en local y escribe en Mongo; usar el `MONGODB_URI` de `/prod` para que lo vea `porra-spa` en producción. `--once` hace una sola pasada. `Ctrl+C` lo para. El TTL de Mongo borra los docs a fin de día UTC.
+- **Scrapeo live periódico (local)**: `node --env-file=.env scripts/scrapeLiveMatches.js` rellena la colección `livematches` cada 30s (ventana `[inicio−15min, inicio+120min]`). Corre en local y escribe en Mongo; usar el `MONGODB_URI` de `/prod` para que lo vea `porra-spa` en producción. `--once` hace una sola pasada. `Ctrl+C` lo para. El TTL de Mongo borra los docs a fin de día UTC. Los partidos en ventana pero sin empezar se guardan con `status: 'NS'` (Sofascore `notstarted`/`willsoonstart`); el frontend los muestra como "⏳ SIN EMPEZAR".
