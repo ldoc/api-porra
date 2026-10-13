@@ -67,8 +67,15 @@ test('liveStatusFromSofascore mapea estados de Sofascore', () => {
   assert.equal(liveStatusFromSofascore('inprogress'), 'LIVE');
   assert.equal(liveStatusFromSofascore('halftime'), 'HT');
   assert.equal(liveStatusFromSofascore('finished'), 'FT');
-  assert.equal(liveStatusFromSofascore('notstarted'), null);
+  assert.equal(liveStatusFromSofascore('notstarted'), 'NS');
+  assert.equal(liveStatusFromSofascore('willsoonstart'), 'NS');
   assert.equal(liveStatusFromSofascore('postponed'), null);
   assert.equal(liveStatusFromSofascore('canceled'), null);
   assert.equal(liveStatusFromSofascore(undefined), null);
+});
+
+test('buildLiveDoc con estado NS deja minute null', () => {
+  const doc = buildLiveDoc(1, { jugadores: [] }, 'NS', nowMs, null);
+  assert.equal(doc.status, 'NS');
+  assert.equal(doc.minute, null);
 });
