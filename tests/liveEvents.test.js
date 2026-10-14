@@ -105,3 +105,36 @@ test('deriveEvents ancla ts al kickoff programado (arranque tardío)', () => {
   const g = evs.find(e => e.type === 'goal');
   assert.equal(new Date(g.ts).toISOString(), '2026-09-16T20:22:00.000Z');
 });
+
+test('deriveEvents emite penalti parado, tarjeta y cambio', () => {
+  const o = obs({ incidents: [
+    { sourceId: 'p1', type: 'penalty_saved', time: 30, keeperId: 12, takerId: 21, teamId: 1 },
+    { sourceId: 'c1', type: 'card', class: 'yellow', time: 33, playerId: 22, teamId: 2, cardType: 'yellow' },
+    { sourceId: 's1', type: 'substitution', time: 60, inId: 30, outId: 11, teamId: 1 }
+  ] });
+  const evs = deriveEvents(o, [], NOW);
+  assert.equal(evs.find(e => e.type === 'penalty_saved').payload.keeperId, 12);
+  assert.equal(evs.find(e => e.type === 'card').payload.cardType, 'yellow');
+  assert.equal(evs.find(e => e.type === 'substitution').payload.inId, 30);
+});
+
+test('deriveEvents anula el gol referenciado', () => {
+  const goal = { sourceId: 'goal|g1', type: 'goal', teamId: 1, playerId: 11, minute: 41,
+    payload: { scorerId: 11, isHome: true, scoreHome: 1, scoreAway: 0 } };
+  const o = obs({ score: { home: 0, away: 0 }, incidents: [
+    { sourceId: 'g1', type: 'goal', class: 'regular', time: 41, isHome: true, playerId: 11, homeScore: 1, awayScore: 0, teamId: 1 },
+    { sourceId: 'v1', type: 'goal_cancelled', class: 'goalDisallowed', time: 43, playerId: 11, teamId: 1 }
+  ] });
+  const evs = deriveEvents(o, [goal], NOW);
+  const cancel = evs.find(e => e.type === 'goal_cancelled');
+  assert.ok(cancel);
+  assert.equal(cancel.payload.ofSourceId, 'goal|g1');
+});
+
+test('deriveEvents emite match_final al terminar', () => {
+  const o = obs({ status: 'FT', score: { home: 1, away: 0 }, ratings: { 11: 7.5 }, minutes: { 11: 90 } });
+  const evs = deriveEvents(o, [], NOW);
+  const f = evs.find(e => e.type === 'match_final');
+  assert.ok(f);
+  assert.deepEqual(f.payload, { scoreHome: 1, scoreAway: 0, ratings: { 11: 7.5 }, minutes: { 11: 90 } });
+});

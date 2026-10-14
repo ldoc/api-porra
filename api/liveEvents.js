@@ -51,6 +51,22 @@ export function deriveEvents(obs, existing = [], nowMs = Date.now()) {
     if (inc.type === 'goal') {
       push({ sourceId: 'goal|' + inc.sourceId, type: 'goal', teamId: inc.teamId, playerId: inc.playerId, minute: inc.time ?? null,
         payload: { scorerId: inc.playerId, assistId: inc.assistId ?? null, isPenalty: inc.class === 'penalty', isOwnGoal: inc.class === 'ownGoal', isHome: !!inc.isHome, scoreHome: inc.homeScore ?? null, scoreAway: inc.awayScore ?? null } });
+    } else if (inc.type === 'penalty_saved') {
+      push({ sourceId: 'psave|' + inc.sourceId, type: 'penalty_saved', teamId: inc.teamId, playerId: inc.keeperId, minute: inc.time ?? null,
+        payload: { keeperId: inc.keeperId ?? null, takerId: inc.takerId ?? null } });
+    } else if (inc.type === 'penalty_missed') {
+      push({ sourceId: 'pmiss|' + inc.sourceId, type: 'penalty_missed', teamId: inc.teamId, playerId: inc.takerId, minute: inc.time ?? null,
+        payload: { takerId: inc.takerId ?? null } });
+    } else if (inc.type === 'card') {
+      push({ sourceId: 'card|' + inc.sourceId, type: 'card', teamId: inc.teamId, playerId: inc.playerId, minute: inc.time ?? null,
+        payload: { cardType: inc.cardType ?? inc.class ?? 'yellow' } });
+    } else if (inc.type === 'substitution') {
+      push({ sourceId: 'sub|' + inc.sourceId, type: 'substitution', teamId: inc.teamId, minute: inc.time ?? null,
+        payload: { inId: inc.inId ?? null, outId: inc.outId ?? null } });
+    } else if (inc.type === 'goal_cancelled') {
+      const ofSourceId = findGoalToCancel(inc, existing, out);
+      push({ sourceId: 'cancel|' + inc.sourceId, type: 'goal_cancelled', teamId: inc.teamId, playerId: inc.playerId, minute: inc.time ?? null,
+        payload: { ofSourceId } });
     }
   }
 
@@ -71,5 +87,18 @@ export function deriveEvents(obs, existing = [], nowMs = Date.now()) {
     push({ sourceId: `score|${obs.score.home}-${obs.score.away}`, type: 'score', minute: obs.minute ?? null, payload: { scoreHome: obs.score.home, scoreAway: obs.score.away } });
   }
 
+  if (obs.status === 'FT') {
+    push({ sourceId: 'final', type: 'match_final', minute: obs.minute ?? 90,
+      payload: { scoreHome: obs.score?.home ?? null, scoreAway: obs.score?.away ?? null, ratings: obs.ratings || {}, minutes: obs.minutes || {} } });
+  }
+
   return out;
+}
+
+function findGoalToCancel(inc, existing, out) {
+  const goals = [...existing, ...out].filter(e => e.type === 'goal');
+  const mine = goals.filter(e => !inc.teamId || e.teamId === inc.teamId);
+  const pool = mine.length ? mine : goals;
+  const last = pool[pool.length - 1];
+  return last ? last.sourceId : null;
 }
