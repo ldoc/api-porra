@@ -87,6 +87,15 @@ test('deriveEvents ancla ts de status por periodo (2ª parte tras el descanso)',
   assert.equal(new Date(live2.ts).toISOString(), '2026-09-16T21:00:00.000Z');
 });
 
+test('deriveEvents ancla goles de la 2ª parte contando el descanso', () => {
+  const kickoffMs = Date.parse('2026-09-16T20:00:00Z');
+  const o = obs({ kickoffMs, score: { home: 1, away: 0 }, incidents: [
+    { sourceId: 'g', type: 'goal', class: 'regular', time: 50, isHome: true, playerId: 11, homeScore: 1, awayScore: 0, teamId: 1 }
+  ] });
+  const g = deriveEvents(o, [], NOW).find(e => e.type === 'goal');
+  assert.equal(new Date(g.ts).toISOString(), '2026-09-16T21:05:00.000Z');
+});
+
 test('deriveEvents ancla ts al kickoff programado (arranque tardío)', () => {
   const kickoffMs = Date.parse('2026-09-16T20:00:00Z');
   const o = obs({ kickoffMs, score: { home: 1, away: 0 }, incidents: [

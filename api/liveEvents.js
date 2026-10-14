@@ -30,7 +30,7 @@ export function deriveEvents(obs, existing = [], nowMs = Date.now()) {
   const out = [];
   const expireAt = expireAtEndOfDayUTC(nowMs);
   const evTs = (minute) => obs.kickoffMs != null
-    ? new Date(obs.kickoffMs + (minute || 0) * 60000)
+    ? new Date(obs.kickoffMs + (minute || 0) * 60000 + ((minute || 0) > 45 ? 15 * 60000 : 0))
     : new Date(nowMs);
   const push = (ev) => {
     if (have.has(ev.sourceId)) return;
