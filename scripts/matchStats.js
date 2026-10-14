@@ -181,3 +181,85 @@ export async function scrapMatchStats(eventId) {
     const { stats } = await scrapMatchFull(eventId);
     return stats;
 }
+
+export function normalizeIncidents(incidentsData, homeTeamId, awayTeamId) {
+    const out = [];
+    for (const inc of incidentsData?.incidents || []) {
+        const teamId = inc.isHome ? homeTeamId : awayTeamId;
+        const base = { sourceId: String(inc.id), time: inc.time ?? null, addedTime: inc.addedTime ?? null, teamId };
+        switch (inc.incidentType) {
+            case 'goal':
+                out.push({ ...base, type: 'goal', class: inc.incidentClass,
+                    playerId: inc.player?.id ?? null,
+                    assistId: inc.footballPassingNetworkAction?.[0]?.player?.id ?? null,
+                    homeScore: inc.homeScore ?? null, awayScore: inc.awayScore ?? null, isHome: !!inc.isHome });
+                break;
+            case 'inGamePenalty':
+                if (inc.incidentClass === 'missed') {
+                    out.push({ ...base, type: 'penalty_saved', keeperId: inc.footballPassingNetworkAction?.[0]?.goalkeeper?.id ?? null, takerId: inc.player?.id ?? null });
+                    out.push({ ...base, type: 'penalty_missed', takerId: inc.player?.id ?? null, sourceId: String(inc.id) + '-taker' });
+                }
+                break;
+            case 'card':
+                out.push({ ...base, type: 'card', class: inc.incidentClass, cardType: inc.incidentClass, playerId: inc.player?.id ?? null });
+                break;
+            case 'substitution':
+                out.push({ ...base, type: 'substitution', inId: inc.playerIn?.id ?? null, outId: inc.playerOut?.id ?? null });
+                break;
+            case 'varDecision':
+                if (inc.incidentClass === 'goalDisallowed') {
+                    out.push({ ...base, type: 'goal_cancelled', class: inc.incidentClass, playerId: inc.player?.id ?? null });
+                }
+                break;
+            default:
+                break;
+        }
+    }
+    return out;
+}
+
+export async function scrapMatchSource(eventId) {
+    const eventUrl = `https://www.sofascore.com/api/v1/event/${eventId}`;
+    const lineupsUrl = `https://www.sofascore.com/api/v1/event/${eventId}/lineups`;
+    const incidentsUrl = `https://www.sofascore.com/api/v1/event/${eventId}/incidents`;
+    const fantasyUrl = `https://www.sofascore.com/api/v1/fantasy/event/${eventId}`;
+
+    const [eventData, incidentsData, fantasyData] = await Promise.all([
+        fetchSofascore(eventUrl),
+        fetchSofascore(incidentsUrl).catch(() => null),
+        fetchSofascore(fantasyUrl).catch(() => null)
+    ]);
+    const ev = eventData.event;
+    const homeTeamId = ev.homeTeam?.id;
+    const awayTeamId = ev.awayTeam?.id;
+
+    let lineupsData = null;
+    try { lineupsData = await fetchSofascore(lineupsUrl); } catch (e) {
+        const notStarted = ev.status?.type === 'notstarted' || ev.status?.type === 'willsoonstart';
+        if (!notStarted) throw e;
+    }
+
+    const players = [...(lineupsData?.home?.players || []), ...(lineupsData?.away?.players || [])];
+    const starters = players.filter(p => !p.substitute).map(p => p.player?.id).filter(Boolean);
+    const ratings = {};
+    const minutes = {};
+    for (const p of players) {
+        const id = p.player?.id;
+        if (!id) continue;
+        if (p.statistics?.rating != null) ratings[id] = p.statistics.rating;
+        if (p.statistics?.minutesPlayed != null) minutes[id] = p.statistics.minutesPlayed;
+    }
+
+    return {
+        eventId,
+        status: null, // lo resuelve el scraper con liveStatusFromSofascore
+        statusType: ev.status?.type ?? null,
+        statusCode: ev.status?.code ?? null,
+        minute: liveMinute(ev.lastPeriod, ev.time?.currentPeriodStartTimestamp, Math.floor(Date.now() / 1000)),
+        period: ev.lastPeriod ?? null,
+        score: { home: ev.homeScore?.display ?? 0, away: ev.awayScore?.display ?? 0 },
+        homeTeamId, awayTeamId,
+        starters, ratings, minutes,
+        incidents: normalizeIncidents(incidentsData, homeTeamId, awayTeamId)
+    };
+}
