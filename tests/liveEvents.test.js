@@ -134,13 +134,13 @@ test('deriveEvents anula el gol referenciado', () => {
 test('findGoalToCancel no reutiliza un gol ya anulado', () => {
   const g1 = { sourceId: 'goal|g1', type: 'goal', teamId: 1, payload: { isHome: true } };
   const g2 = { sourceId: 'goal|g2', type: 'goal', teamId: 1, payload: { isHome: true } };
-  const c1 = { sourceId: 'cancel|v1', type: 'goal_cancelled', payload: { ofSourceId: 'goal|g1' } };
-  const o = obs({ score: { home: 1, away: 0 }, incidents: [
-    { sourceId: 'v2', type: 'goal_cancelled', class: 'goalDisallowed', time: 61, isHome: true, playerId: 12, teamId: 1 }
+  const c2 = { sourceId: 'cancel|v2', type: 'goal_cancelled', payload: { ofSourceId: 'goal|g2' } };
+  const o = obs({ score: { home: 0, away: 0 }, incidents: [
+    { sourceId: 'v3', type: 'goal_cancelled', class: 'goalDisallowed', time: 70, isHome: true, playerId: 13, teamId: 1 }
   ] });
-  const evs = deriveEvents(o, [g1, g2, c1], NOW);
-  const c2 = evs.find(e => e.type === 'goal_cancelled');
-  assert.equal(c2.payload.ofSourceId, 'goal|g2');
+  const evs = deriveEvents(o, [g1, g2, c2], NOW);
+  const c3 = evs.find(e => e.type === 'goal_cancelled');
+  assert.equal(c3.payload.ofSourceId, 'goal|g1');
 });
 
 test('deriveEvents emite match_final al terminar', () => {
