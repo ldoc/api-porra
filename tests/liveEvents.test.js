@@ -79,6 +79,14 @@ test('deriveEvents emite la reanudacion de la 2ª parte (LIVE→HT→LIVE)', () 
   assert.equal(st[0].payload.period, 'period2');
 });
 
+test('deriveEvents ancla ts de status por periodo (2ª parte tras el descanso)', () => {
+  const kickoffMs = Date.parse('2026-09-16T20:00:00Z');
+  const ht = deriveEvents(obs({ kickoffMs, status: 'HT', period: 'halftime' }), [], NOW).find(e => e.type === 'status');
+  const live2 = deriveEvents(obs({ kickoffMs, status: 'LIVE', period: 'period2' }), [], NOW).find(e => e.type === 'status');
+  assert.equal(new Date(ht.ts).toISOString(), '2026-09-16T20:45:00.000Z');
+  assert.equal(new Date(live2.ts).toISOString(), '2026-09-16T21:00:00.000Z');
+});
+
 test('deriveEvents ancla ts al kickoff programado (arranque tardío)', () => {
   const kickoffMs = Date.parse('2026-09-16T20:00:00Z');
   const o = obs({ kickoffMs, score: { home: 1, away: 0 }, incidents: [

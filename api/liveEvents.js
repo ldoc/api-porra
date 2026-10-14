@@ -55,8 +55,11 @@ export function deriveEvents(obs, existing = [], nowMs = Date.now()) {
   }
 
   if (obs.status) {
-    const sm = obs.status === 'LIVE' ? 0 : obs.status === 'HT' ? 45 : (obs.minute ?? 90);
-    push({ sourceId: 'status|' + obs.status + '|' + (obs.period ?? ''), type: 'status', minute: sm, payload: { status: obs.status, period: obs.period ?? null } });
+    const p2 = obs.period && obs.period !== 'period1';
+    const sm = obs.status === 'HT' ? 45 : obs.status === 'LIVE' ? (p2 ? 45 : 0) : (obs.minute ?? 90);
+    const breakMin = (obs.status === 'LIVE' && p2) || obs.status === 'FT' ? 15 : 0;
+    const sts = obs.kickoffMs != null ? new Date(obs.kickoffMs + (sm + breakMin) * 60000) : undefined;
+    push({ sourceId: 'status|' + obs.status + '|' + (obs.period ?? ''), type: 'status', minute: sm, ts: sts, payload: { status: obs.status, period: obs.period ?? null } });
   }
 
   for (const [pid, rating] of Object.entries(obs.ratings || {})) {
