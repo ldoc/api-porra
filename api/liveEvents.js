@@ -96,7 +96,9 @@ export function deriveEvents(obs, existing = [], nowMs = Date.now()) {
 }
 
 function findGoalToCancel(inc, existing, out) {
-  const goals = [...existing, ...out].filter(e => e.type === 'goal');
+  const all = [...existing, ...out];
+  const cancelled = new Set(all.filter(e => e.type === 'goal_cancelled').map(e => e.payload?.ofSourceId));
+  const goals = all.filter(e => e.type === 'goal' && !cancelled.has(e.sourceId));
   const mine = goals.filter(e => !inc.teamId || e.teamId === inc.teamId);
   const pool = mine.length ? mine : goals;
   const last = pool[pool.length - 1];
