@@ -69,6 +69,16 @@ test('deriveEvents emite rating solo cuando cambia el valor', () => {
   assert.equal(again.filter(e => e.type === 'rating').length, 0);
 });
 
+test('deriveEvents emite la reanudacion de la 2ª parte (LIVE→HT→LIVE)', () => {
+  const a = deriveEvents(obs({ status: 'LIVE', period: 'period1' }), [], NOW);
+  assert.equal(a.find(e => e.type === 'status').sourceId, 'status|LIVE|period1');
+  const ht = deriveEvents(obs({ status: 'HT', period: 'halftime' }), a, NOW);
+  const live2 = deriveEvents(obs({ status: 'LIVE', period: 'period2' }), [...a, ...ht], NOW);
+  const st = live2.filter(e => e.type === 'status');
+  assert.equal(st.length, 1);
+  assert.equal(st[0].payload.period, 'period2');
+});
+
 test('deriveEvents ancla ts al kickoff programado (arranque tardío)', () => {
   const kickoffMs = Date.parse('2026-09-16T20:00:00Z');
   const o = obs({ kickoffMs, score: { home: 1, away: 0 }, incidents: [

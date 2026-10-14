@@ -56,7 +56,7 @@ export function deriveEvents(obs, existing = [], nowMs = Date.now()) {
 
   if (obs.status) {
     const sm = obs.status === 'LIVE' ? 0 : obs.status === 'HT' ? 45 : (obs.minute ?? 90);
-    push({ sourceId: 'status|' + obs.status, type: 'status', minute: sm, payload: { status: obs.status, period: obs.period ?? null } });
+    push({ sourceId: 'status|' + obs.status + '|' + (obs.period ?? ''), type: 'status', minute: sm, payload: { status: obs.status, period: obs.period ?? null } });
   }
 
   for (const [pid, rating] of Object.entries(obs.ratings || {})) {
