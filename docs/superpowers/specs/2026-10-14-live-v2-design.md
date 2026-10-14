@@ -120,6 +120,10 @@ delta.
 
 - **Orden global** por `ts` (absoluto); `minute`/`second` para el reloj intrapartido
   (los minutos no son comparables entre partidos simultáneos).
+- **`ts` anclado al calendario**: el `ts` de cada evento se deriva del `fecha` programado
+  del partido + el minuto de juego (`fecha + minuto·60s`, ajustando descanso), **no** del
+  instante de detección del scraper. Así el eje temporal y el reloj son fieles aunque el
+  scraper arranque con el partido ya empezado (los eventos previos no se apilan en `now`).
 - **Marcador calculado**: se pliega `goal` **menos** `goal_cancelled`; `payload.scoreHome/
   scoreAway` es solo pista/validación, nunca fuente de verdad. `score` es un ajuste
   autoritativo de seguridad.
@@ -133,17 +137,28 @@ delta.
   minuto).
 - **Nota inicial** 6.0 (baseline Sofascore) y se sobrescribe con cada evento `rating`.
 
+**Arranque tardío (resiliencia):** si el scraper empieza con el partido ya en juego,
+`/incidents` devuelve el historial completo, así que goles, asistencias, tarjetas, cambios,
+penaltis y anulaciones previos se emiten igualmente (dedup por `sourceId`), con su `ts`
+derivado del minuto real. La reconciliación de marcador (`score`) corrige cualquier hueco.
+Si arranca tras el final (dentro de ventana), `status FT` + `match_final` capturan de golpe
+notas, minutos y marcador finales. **Limitación aceptada:** Sofascore no expone el
+histórico de la nota, por lo que solo se captura la nota actual; el replay no muestra los
+cambios intermedios de nota ocurridos antes del arranque.
+
 ## 2. Scraper (`api-porra`)
 
 - Se conserva el patrón: `scripts/scrapeLiveMatches.js` en bucle cada **30 s**,
   `selectLiveMatches(calendar, now)` para los partidos en ventana.
 - Nuevo módulo puro **`api/liveEvents.js`**: constantes de tipos y
-  `deriveEvents(observation, existingEvents) → newEvents[]`.
+  `deriveEvents(observation, existingEvents, nowMs) → newEvents[]`. El `ts` de cada evento
+  se calcula como `observation.kickoffMs + minute·60s` (kickoff = `fecha` del calendario
+  pasado por el scraper), con `nowMs` solo como respaldo si no hay minuto.
 - Nueva **`scrapMatchSource(eventId)`** en `scripts/matchStats.js` que devuelve una
   observación normalizada de Sofascore sin perder atribución:
 
   ```js
-  { eventId, status, minute, score: { home, away },
+  { eventId, kickoffMs, status, minute, score: { home, away },
     incidents: [{ sourceId, type, class, time, addedTime, playerId, assistId,
                   keeperId, inId, outId, cardType, teamId }],
     ratings: { [playerId]: nota },
@@ -293,8 +308,10 @@ Runner `node:test` (como en ambos repos).
 
 ## Riesgos y casos límite
 
-- **Completitud del log** (event-sourcing puro): si el scraper se detiene, faltan eventos.
-  Mitigación: `score` autoritativo de seguridad + `livematches` de respaldo.
+- **Completitud del log** (event-sourcing puro): si el scraper se detiene o arranca tarde,
+  los incidentes previos se recuperan de `/incidents` y la reconciliación `score` corrige el
+  marcador; el `ts` se ancla al kickoff programado. Mitigación adicional: `livematches` de
+  respaldo. Limitación: la nota solo se captura a partir del primer scrapeo.
 - **Atribución de anulación**: si Sofascore ya había quitado el gol antes del primer
   scrapeo, no hay `goal` que revertir; lo cubre el evento `score`.
 - **Cambios de nota**: dependen del polling (granularidad ~30 s); la nota del timeline es
