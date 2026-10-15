@@ -54,3 +54,9 @@ export function buildLiveResponse(docs) {
   }, 0);
   return { ok: true, liveMatches, serverTime: max ? new Date(max).toISOString() : null };
 }
+
+export function buildLiveEventsResponse(docs) {
+  const events = [...(docs || [])].sort((a, b) => new Date(a.ts) - new Date(b.ts));
+  const max = events.reduce((acc, d) => Math.max(acc, new Date(d.ts).getTime()), 0);
+  return { ok: true, events, serverTime: max ? new Date(max).toISOString() : null };
+}
