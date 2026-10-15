@@ -278,6 +278,11 @@ Estilo elegido entre tres opciones: **Elevar 3D**.
 
 ## 7. Front — reproductor temporal
 
+> **DESCOPE (2026-10-15):** el reproductor temporal se **eliminó** por decisión del
+> usuario (poco valor percibido). El tab Live muestra siempre el presente (foldAll).
+> Esta sección queda como registro del diseño original, no como requisito. La función
+> pura `stateAt` de `js/liveV2.js` se conserva (con tests) por si se recupera la idea.
+
 - **Global**: un único playhead sobre el eje `ts` abarca todos los partidos en juego.
 - Control definitivo (**estilo 1, sin velocidad**): botón ▶/❚❚, línea temporal con
   **marcas de color por tipo de evento** (gol, penalti, tarjeta, anulado), reloj, badge
