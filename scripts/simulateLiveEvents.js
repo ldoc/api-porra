@@ -103,6 +103,9 @@ async function main() {
     goals[Number(m)] = side.toUpperCase();
   }
   const minutes = [...new Set(minutesArg.split(',').map(s => Number(s.trim())).filter(n => !Number.isNaN(n)))].sort((a, b) => a - b);
+  if (varMin != null && !minutes.includes(varMin)) minutes.push(varMin);
+  if (penaltyMin != null && !minutes.includes(penaltyMin)) minutes.push(penaltyMin);
+  minutes.sort((a, b) => a - b);
 
   const kickoffMs = Date.now();
   const expireAt = expireAtEndOfDayUTC(Date.now());
