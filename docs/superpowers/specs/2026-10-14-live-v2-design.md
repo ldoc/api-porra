@@ -106,8 +106,9 @@ delta.
 |------|---------|-----------|
 | `lineup` | `{ starters: [playerId] }` | quién está en el campo (minutos/GK) |
 | `status` | `{ status, period }` | NS/LIVE/HT/FT, inicio de periodo |
-| `goal` | `{ scorerId, assistId, isPenalty, isOwnGoal, scoreHome, scoreAway }` | marcador + goles/asistencias |
+| `goal` | `{ scorerId, isPenalty, isOwnGoal, scoreHome, scoreAway }` | marcador + goles |
 | `goal_cancelled` | `{ ofSourceId }` | gol anulado (VAR) → revierte el gol referido |
+| `assist` | `{ asistencias }` | asistencia de gol (contador por jugador, desde `fantasy`) |
 | `penalty_saved` | `{ keeperId, takerId }` | +3 portero |
 | `penalty_missed` | `{ takerId }` | ambientación |
 | `card` | `{ cardType: yellow\|red\|yellowRed }` | ambientación |
@@ -132,6 +133,10 @@ delta.
   aunque Sofascore elimine el gol del feed, conservamos el gol original y su cancelación.
 - **Gol en propia** (`isOwnGoal`): suma al equipo contrario en el marcador y no suma gol
   al jugador.
+- **Asistencias**: el incidente de gol **no** trae asistente fiable
+  (`footballPassingNetworkAction` es la red de pases, no el asistente). Por eso la
+  asistencia se deriva del endpoint `fantasy` (contador de asistencias por jugador) como
+  eventos `assist`; el reducer del front fija `asistencias` del jugador a ese contador.
 - **Minutos de jugador** (`minutos`, decide portería a cero > 70'): se **derivan en el
   front** del reloj del partido + `lineup`/`substitution` (no se emite un evento por
   minuto).
@@ -162,6 +167,7 @@ cambios intermedios de nota ocurridos antes del arranque.
     incidents: [{ sourceId, type, class, time, addedTime, playerId, assistId,
                   keeperId, inId, outId, cardType, teamId }],
     ratings: { [playerId]: nota },
+    assists: { [playerId]: num },
     minutes: { [playerId]: min },
     starters: [playerId],
     stats }  // se mantiene para el snapshot livematches
@@ -176,6 +182,8 @@ cambios intermedios de nota ocurridos antes del arranque.
     `substitution` / `status`. `sourceId` = id de incidente Sofascore.
   - `ratings`: diff contra las notas representadas por eventos → `rating` por jugador
     cambiado. `sourceId = rating|playerId|valor` (idempotente).
+  - `assists`: contador de asistencias por jugador desde `fantasy` → `assist` cuando
+    sube. `sourceId = assist|playerId|valor` (idempotente).
   - `lineup` al primer avistamiento de alineaciones.
   - **`match_final`** al detectar FT: `{ scoreHome, scoreAway, ratings: {}, minutes: {} }`
     para fijar de forma autoritativa notas y minutos (portería a cero > 70').
