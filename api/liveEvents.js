@@ -83,6 +83,7 @@ export function deriveEvents(obs, existing = [], nowMs = Date.now()) {
   }
 
   for (const [pid, count] of Object.entries(obs.assists || {})) {
+    if (!count) continue; // evitar flood de contadores 0
     push({ sourceId: `assist|${pid}|${count}`, type: 'assist', playerId: Number(pid), minute: obs.minute ?? null, payload: { asistencias: count } });
   }
 

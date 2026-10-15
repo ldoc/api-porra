@@ -53,6 +53,11 @@ test('deriveEvents emite assist cuando sube el contador', () => {
   assert.equal(again.filter(e => e.type === 'assist').length, 0);
 });
 
+test('deriveEvents no emite assist para contador 0', () => {
+  const evs = deriveEvents(obs({ assists: { 12: 0 } }), [], NOW);
+  assert.equal(evs.filter(e => e.type === 'assist').length, 0);
+});
+
 test('foldScore suma goles y aplica cancelaciones', () => {
   const events = [
     { sourceId: 'goal|a', type: 'goal', payload: { isHome: true } },
