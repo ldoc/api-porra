@@ -82,9 +82,10 @@ cualquier instante:
 
 ```js
 {
-  _id,          // ObjectId → cursor de delta (ordenable)
+  _id,          // ObjectId
   eventId,      // partido Sofascore (ref a calendar)
-  ts,           // ISO absoluto de detección → eje del timeline global
+  ingestedAt,   // ISO del instante de detección (monótono) → cursor de delta
+  ts,           // ISO derivado del kickoff+minuto → eje del timeline global
   minute,       // reloj de partido (display + orden intrapartido)
   second,
   type,         // ver tipos
@@ -97,8 +98,10 @@ cualquier instante:
 ```
 
 **Índices:** único `{ eventId: 1, sourceId: 1 }` (upsert idempotente: re-scrapear el mismo
-tick no duplica), TTL `{ expireAt: 1 }` con `expireAfterSeconds: 0`, y `{ ts: 1 }` para el
-delta.
+tick no duplica), TTL `{ expireAt: 1 }` con `expireAfterSeconds: 0`, `{ ingestedAt: 1 }`
+para el delta y `{ ts: 1 }` para el timeline. **El delta usa `ingestedAt` (instante de
+detección, monótono), NO `ts`** (que va anclado al reloj del partido y por tanto no es
+monótono en orden de inserción).
 
 **Tipos y `payload`:**
 
@@ -197,7 +200,7 @@ cambios intermedios de nota ocurridos antes del arranque.
 | Método | Ruta | Uso |
 |--------|------|-----|
 | `GET` | `/api/live/events` | Carga inicial + timeline: eventos de hoy (ventana live). |
-| `GET` | `/api/live/events?since=<ISO>` | Delta en segundo plano: `ts > since`; devuelve `serverTime = max(ts)`. El front deduplica por `_id` (solape inocuo). |
+| `GET` | `/api/live/events?since=<ISO>` | Delta en segundo plano: `ingestedAt > since`; devuelve `serverTime = max(ingestedAt)`. El front deduplica por `_id` (solape inocuo). |
 | `GET` | `/api/live` | Se mantiene: snapshots `livematches` (respaldo/salud). |
 | `GET` | `/api/config` | Ya expone `liveRefreshSecs`; sin cambios. |
 | `DELETE` | `/api/live/events/:eventId` | Admin: limpieza/debug (espejo del delete de matchstats). |
