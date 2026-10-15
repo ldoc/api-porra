@@ -89,7 +89,7 @@ export function buildAssistsMap(fantasyData) {
     return assists;
 }
 
-export async function scrapMatchFull(eventId) {
+export async function fetchMatchData(eventId) {
     const eventUrl = `https://www.sofascore.com/api/v1/event/${eventId}`;
     const lineupsUrl = `https://www.sofascore.com/api/v1/event/${eventId}/lineups`;
     const incidentsUrl = `https://www.sofascore.com/api/v1/event/${eventId}/incidents`;
@@ -109,6 +109,14 @@ export async function scrapMatchFull(eventId) {
     } catch (e) {
         if (!notStarted) throw e;
     }
+
+    return { eventData, incidentsData, fantasyData, lineupsData };
+}
+
+export async function scrapMatchFull(eventId, raw = null) {
+    const { eventData, incidentsData, fantasyData, lineupsData } = raw ?? await fetchMatchData(eventId);
+
+    const ev = eventData.event;
 
     const assistsMap = buildAssistsMap(fantasyData);
 
@@ -199,7 +207,10 @@ export function normalizeIncidents(incidentsData, homeTeamId, awayTeamId) {
                 break;
             case 'inGamePenalty':
                 if (inc.incidentClass === 'missed') {
-                    out.push({ ...base, type: 'penalty_saved', keeperId: inc.footballPassingNetworkAction?.[0]?.goalkeeper?.id ?? null, takerId: inc.player?.id ?? null });
+                    const keeperId = inc.footballPassingNetworkAction?.[0]?.goalkeeper?.id ?? null;
+                    if (keeperId != null) {
+                        out.push({ ...base, type: 'penalty_saved', keeperId, takerId: inc.player?.id ?? null });
+                    }
                     out.push({ ...base, type: 'penalty_missed', takerId: inc.player?.id ?? null, sourceId: String(inc.id) + '-taker' });
                 }
                 break;
@@ -221,26 +232,12 @@ export function normalizeIncidents(incidentsData, homeTeamId, awayTeamId) {
     return out;
 }
 
-export async function scrapMatchSource(eventId) {
-    const eventUrl = `https://www.sofascore.com/api/v1/event/${eventId}`;
-    const lineupsUrl = `https://www.sofascore.com/api/v1/event/${eventId}/lineups`;
-    const incidentsUrl = `https://www.sofascore.com/api/v1/event/${eventId}/incidents`;
-    const fantasyUrl = `https://www.sofascore.com/api/v1/fantasy/event/${eventId}`;
+export async function scrapMatchSource(eventId, raw = null) {
+    const { eventData, incidentsData, fantasyData, lineupsData } = raw ?? await fetchMatchData(eventId);
 
-    const [eventData, incidentsData, fantasyData] = await Promise.all([
-        fetchSofascore(eventUrl),
-        fetchSofascore(incidentsUrl).catch(() => null),
-        fetchSofascore(fantasyUrl).catch(() => null)
-    ]);
     const ev = eventData.event;
     const homeTeamId = ev.homeTeam?.id;
     const awayTeamId = ev.awayTeam?.id;
-
-    let lineupsData = null;
-    try { lineupsData = await fetchSofascore(lineupsUrl); } catch (e) {
-        const notStarted = ev.status?.type === 'notstarted' || ev.status?.type === 'willsoonstart';
-        if (!notStarted) throw e;
-    }
 
     const players = [...(lineupsData?.home?.players || []), ...(lineupsData?.away?.players || [])];
     const starters = players.filter(p => !p.substitute).map(p => p.player?.id).filter(Boolean);

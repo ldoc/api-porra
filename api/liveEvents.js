@@ -36,7 +36,7 @@ export function deriveEvents(obs, existing = [], nowMs = Date.now()) {
     if (have.has(ev.sourceId)) return;
     have.add(ev.sourceId);
     out.push({
-      eventId: obs.eventId, ts: ev.ts ?? evTs(ev.minute), second: 0,
+      eventId: obs.eventId, ingestedAt: new Date(nowMs), ts: ev.ts ?? evTs(ev.minute), second: 0,
       minute: ev.minute ?? null, type: ev.type,
       teamId: ev.teamId ?? null, playerId: ev.playerId ?? null,
       sourceId: ev.sourceId, payload: ev.payload ?? {}, expireAt
@@ -72,7 +72,10 @@ export function deriveEvents(obs, existing = [], nowMs = Date.now()) {
 
   if (obs.status) {
     const p2 = obs.period && obs.period !== 'period1';
-    const sm = obs.status === 'HT' ? 45 : obs.status === 'LIVE' ? (p2 ? 45 : 0) : (obs.minute ?? 90);
+    const sm = obs.status === 'NS' ? 0
+      : obs.status === 'HT' ? 45
+      : obs.status === 'LIVE' ? (p2 ? 45 : 0)
+      : (obs.minute ?? 90);
     const breakMin = (obs.status === 'LIVE' && p2) || obs.status === 'FT' ? 15 : 0;
     const sts = obs.kickoffMs != null ? new Date(obs.kickoffMs + (sm + breakMin) * 60000) : undefined;
     push({ sourceId: 'status|' + obs.status + '|' + (obs.period ?? ''), type: 'status', minute: sm, ts: sts, payload: { status: obs.status, period: obs.period ?? null } });

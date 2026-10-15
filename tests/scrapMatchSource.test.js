@@ -21,6 +21,19 @@ test('normalizeIncidents mapea goal, penalty, card, sub, var', () => {
   assert.equal(by('substitution').teamId, 1);
   assert.equal(by('penalty_saved').keeperId, 12);
   assert.equal(by('goal_cancelled').class, 'goalDisallowed');
+  assert.equal(out.find(i => i.type === 'penalty_missed').takerId, 21);
+});
+
+test('normalizeIncidents no emite penalty_saved si no hay portero identificable', () => {
+  const raw = { incidents: [
+    { id: 10, incidentType: 'inGamePenalty', incidentClass: 'missed', time: 55, isHome: false, player: { id: 31 } }
+  ] };
+  const out = normalizeIncidents(raw, 1, 2);
+  assert.equal(out.filter(i => i.type === 'penalty_saved').length, 0);
+  const pm = out.find(i => i.type === 'penalty_missed');
+  assert.ok(pm, 'debe emitir penalty_missed');
+  assert.equal(pm.takerId, 31);
+  assert.equal(pm.sourceId, '10-taker');
 });
 
 test('buildAssistsMap extrae asistencias por jugador', () => {

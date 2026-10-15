@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { connectDB, LiveMatch, LiveEvent } from '../db/index.js';
-import { scrapMatchSource, scrapMatchFull } from './matchStats.js';
+import { scrapMatchSource, scrapMatchFull, fetchMatchData } from './matchStats.js';
 import { deriveEvents } from '../api/liveEvents.js';
 import { selectLiveMatches, buildLiveDoc, liveStatusFromSofascore } from '../api/live.js';
 
@@ -20,28 +20,30 @@ async function tick() {
   console.log(`${stamp()} Partidos en ventana live: ${live.length}`);
   if (live.length === 0) return;
 
-  const existing = await LiveMatch.find({ eventId: { $in: live.map(m => m.id) } }, 'eventId status').lean();
-  const finished = new Set(existing.filter(d => d.status === 'FT').map(d => d.eventId));
+  const ids = live.map(m => m.id);
+  const [snapshots, finalEvents] = await Promise.all([
+    LiveMatch.find({ eventId: { $in: ids } }, 'eventId status').lean(),
+    LiveEvent.find({ eventId: { $in: ids }, sourceId: 'final' }, 'eventId').lean()
+  ]);
+  const finals = new Set(finalEvents.map(d => d.eventId));
+  const finished = new Set(
+    snapshots.filter(d => d.status === 'FT' && finals.has(d.eventId)).map(d => d.eventId)
+  );
 
   let ok = 0;
   for (const m of live) {
     if (finished.has(m.id)) continue;
     try {
-      // 1) snapshot (respaldo) — mantiene el comportamiento actual
-      const { stats, statusType, statusCode, minute } = await scrapMatchFull(m.id);
-      const status = liveStatusFromSofascore(statusType, statusCode);
-      if (!status) continue;
-      await LiveMatch.findOneAndUpdate(
-        { eventId: m.id },
-        buildLiveDoc(m.id, stats, status, Date.now(), minute),
-        { upsert: true, returnDocument: 'after' }
-      );
+      // 1) datos Sofascore una sola vez por partido (4 endpoints)
+      const raw = await fetchMatchData(m.id);
 
-      // 2) eventos
-      const obs = await scrapMatchSource(m.id);
+      // 2) eventos ANTES del snapshot: un fallo posterior no debe marcar FT sin eventos
+      const obs = await scrapMatchSource(m.id, raw);
+      const status = liveStatusFromSofascore(obs.statusType, obs.statusCode);
+      if (!status) continue;
       obs.status = status;
       obs.kickoffMs = m.fecha * 1000; // ancla temporal al inicio programado
-      const existing = await LiveEvent.find({ eventId: m.id }, 'sourceId type payload').lean();
+      const existing = await LiveEvent.find({ eventId: m.id }, 'sourceId type payload').sort({ ts: 1, _id: 1 }).lean();
       const nuevos = deriveEvents(obs, existing, Date.now());
       if (nuevos.length) {
         try {
@@ -50,6 +52,14 @@ async function tick() {
           if (e.code !== 11000) throw e; // duplicados: ignorar
         }
       }
+
+      // 3) snapshot (respaldo) — mantiene el comportamiento actual
+      const { stats, minute } = await scrapMatchFull(m.id, raw);
+      await LiveMatch.findOneAndUpdate(
+        { eventId: m.id },
+        buildLiveDoc(m.id, stats, status, Date.now(), minute),
+        { upsert: true, returnDocument: 'after' }
+      );
       ok++;
     } catch (e) {
       console.error(`${stamp()} Fallo scrapeo ${m.id}: ${e.message}`);

@@ -20,7 +20,7 @@ import { computeWeakEtag, etagMatches } from './api/etag.js';
 import { parseSinceParam } from './api/matchStatsFilter.js';
 import { calculateUserStandings, getLigaMatchIds, getMatchFaseMap } from './api/standings.js';
 import { guestReadFilter, canSeeGuests, bypassesGameLocks, guestEditingEnabled } from './api/guest.js';
-import { getLiveRefreshSecs, buildLiveResponse, buildLiveEventsResponse } from './api/live.js';
+import { getLiveRefreshSecs, buildLiveResponse, buildLiveEventsResponse, liveEventsQuery } from './api/live.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1277,10 +1277,10 @@ const server = http.createServer(async (req, res) => {
         sendJson(req, res, 400, { ok: false, error: 'Parámetro since inválido' });
         return;
       }
-      const filter = sinceResult.date ? { ts: { $gt: sinceResult.date } } : {};
-      const docs = await LiveEvent.find(filter).sort({ ts: 1 }).lean();
-      const last = await LiveEvent.findOne({}, { ts: 1 }).sort({ ts: -1 }).lean();
-      const serverTime = last ? new Date(last.ts).toISOString() : null;
+      const filter = liveEventsQuery(sinceResult.date);
+      const docs = await LiveEvent.find(filter).sort({ ingestedAt: 1 }).lean();
+      const last = await LiveEvent.findOne({}, { ingestedAt: 1 }).sort({ ingestedAt: -1 }).lean();
+      const serverTime = last ? new Date(last.ingestedAt).toISOString() : null;
       sendJson(req, res, 200, buildLiveEventsResponse(docs, serverTime));
     } catch (e) {
       sendJson(req, res, 500, { ok: false, error: 'Error al obtener eventos live' });

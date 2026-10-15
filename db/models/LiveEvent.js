@@ -1,7 +1,8 @@
 import mongoose from 'mongoose';
 
 const liveEventSchema = new mongoose.Schema({
-  eventId: { type: Number, required: true, index: true },
+  eventId: { type: Number, required: true },
+  ingestedAt: { type: Date, required: true, index: true },
   ts: { type: Date, required: true, index: true },
   minute: { type: Number, default: null },
   second: { type: Number, default: 0 },

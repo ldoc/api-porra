@@ -59,3 +59,7 @@ export function buildLiveEventsResponse(docs, serverTime = null) {
   const events = [...(docs || [])].sort((a, b) => new Date(a.ts) - new Date(b.ts));
   return { ok: true, events, serverTime: serverTime ?? null };
 }
+
+export function liveEventsQuery(sinceDate) {
+  return sinceDate ? { ingestedAt: { $gt: sinceDate } } : {};
+}

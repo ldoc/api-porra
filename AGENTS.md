@@ -150,7 +150,7 @@ api-porra/
 
 | Método | Ruta                          | Descripción                                    |
 |--------|-------------------------------|------------------------------------------------|
-| GET    | `/api/live/events`            | Eventos de la jornada (colección `liveevents`). `?since=<ISO>` → delta por `ts`; añade `serverTime`. `since` malformado → 400 |
+| GET    | `/api/live/events`            | Eventos de la jornada (colección `liveevents`). `?since=<ISO>` → delta por `ingestedAt`; añade `serverTime`. `since` malformado → 400 |
 | GET    | `/api/live`                   | Snapshots `livematches` (respaldo).            |
 | DELETE | `/api/live/events/:eventId`   | (admin) borra eventos de un partido.           |
 

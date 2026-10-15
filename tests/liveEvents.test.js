@@ -21,6 +21,26 @@ test('EVENT_TYPES contiene los tipos esperados', () => {
   assert.deepEqual(EVENT_TYPES, ['lineup','status','goal','goal_cancelled','assist','penalty_saved','penalty_missed','card','substitution','rating','score','match_final']);
 });
 
+test('deriveEvents asigna ingestedAt (instante de deteccion) a todos los eventos', () => {
+  const o = obs({ score: { home: 1, away: 0 }, incidents: [
+    { sourceId: 'g', type: 'goal', class: 'regular', time: 22, isHome: true, playerId: 11, homeScore: 1, awayScore: 0, teamId: 1 }
+  ] });
+  const evs = deriveEvents(o, [], NOW);
+  assert.ok(evs.length > 0);
+  for (const e of evs) {
+    assert.ok(e.ingestedAt instanceof Date, `evento ${e.sourceId} sin ingestedAt Date`);
+    assert.equal(e.ingestedAt.getTime(), NOW);
+  }
+});
+
+test('deriveEvents ancla el status NS al minuto 0 (pre-kickoff)', () => {
+  const kickoffMs = Date.parse('2026-09-16T20:00:00Z');
+  const st = deriveEvents(obs({ kickoffMs, status: 'NS', minute: null, period: null, starters: [] }), [], NOW).find(e => e.type === 'status');
+  assert.ok(st);
+  assert.equal(st.minute, 0);
+  assert.equal(new Date(st.ts).toISOString(), '2026-09-16T20:00:00.000Z');
+});
+
 test('deriveEvents emite lineup y status una sola vez', () => {
   const a = deriveEvents(obs(), [], NOW);
   assert.deepEqual(a.filter(e => e.type === 'lineup').length, 1);
@@ -118,6 +138,32 @@ test('deriveEvents ancla ts al kickoff programado (arranque tardío)', () => {
   const evs = deriveEvents(o, [], Date.parse('2026-09-16T20:30:00Z'));
   const g = evs.find(e => e.type === 'goal');
   assert.equal(new Date(g.ts).toISOString(), '2026-09-16T20:22:00.000Z');
+});
+
+test('deriveEvents emite penalty_missed con el tirador', () => {
+  const o = obs({ incidents: [
+    { sourceId: 'pm1', type: 'penalty_missed', time: 35, takerId: 21, teamId: 1 }
+  ] });
+  const evs = deriveEvents(o, [], NOW);
+  const pm = evs.find(e => e.type === 'penalty_missed');
+  assert.ok(pm);
+  assert.equal(pm.playerId, 21);
+  assert.equal(pm.payload.takerId, 21);
+  const again = deriveEvents(o, evs, NOW);
+  assert.equal(again.filter(e => e.type === 'penalty_missed').length, 0);
+});
+
+test('deriveEvents cancela dos goles distintos en el mismo tick', () => {
+  const g1 = { sourceId: 'goal|g1', type: 'goal', teamId: 1, payload: { isHome: true } };
+  const g2 = { sourceId: 'goal|g2', type: 'goal', teamId: 1, payload: { isHome: true } };
+  const o = obs({ score: { home: 0, away: 0 }, incidents: [
+    { sourceId: 'v1', type: 'goal_cancelled', class: 'goalDisallowed', time: 10, isHome: true, playerId: 11, teamId: 1 },
+    { sourceId: 'v2', type: 'goal_cancelled', class: 'goalDisallowed', time: 20, isHome: true, playerId: 12, teamId: 1 }
+  ] });
+  const evs = deriveEvents(o, [g1, g2], NOW);
+  const cancels = evs.filter(e => e.type === 'goal_cancelled');
+  assert.equal(cancels.length, 2);
+  assert.deepEqual(cancels.map(c => c.payload.ofSourceId).sort(), ['goal|g1', 'goal|g2']);
 });
 
 test('deriveEvents emite penalti parado, tarjeta y cambio', () => {

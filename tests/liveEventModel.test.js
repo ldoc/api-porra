@@ -11,4 +11,15 @@ test('LiveEvent declara colección liveevents e índices', () => {
   const ttl = idx.find(([keys]) => keys.expireAt === 1);
   assert.ok(ttl, 'falta índice TTL expireAt');
   assert.equal(ttl[1].expireAfterSeconds, 0);
+  const ingested = idx.find(([keys]) => keys.ingestedAt === 1);
+  assert.ok(ingested, 'falta índice {ingestedAt}');
+  const ts = idx.find(([keys]) => keys.ts === 1);
+  assert.ok(ts, 'falta índice {ts}');
+});
+
+test('LiveEvent exige ingestedAt y no duplica el índice de eventId', () => {
+  assert.equal(LiveEvent.schema.path('ingestedAt').isRequired, true);
+  const idx = LiveEvent.schema.indexes();
+  const single = idx.find(([keys]) => Object.keys(keys).length === 1 && keys.eventId === 1);
+  assert.equal(single, undefined, 'índice single {eventId} debería eliminarse');
 });
