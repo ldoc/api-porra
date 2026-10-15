@@ -1,5 +1,5 @@
 export const EVENT_TYPES = [
-  'lineup', 'status', 'goal', 'goal_cancelled', 'penalty_saved',
+  'lineup', 'status', 'goal', 'goal_cancelled', 'assist', 'penalty_saved',
   'penalty_missed', 'card', 'substitution', 'rating', 'score', 'match_final'
 ];
 
@@ -50,7 +50,7 @@ export function deriveEvents(obs, existing = [], nowMs = Date.now()) {
   for (const inc of obs.incidents || []) {
     if (inc.type === 'goal') {
       push({ sourceId: 'goal|' + inc.sourceId, type: 'goal', teamId: inc.teamId, playerId: inc.playerId, minute: inc.time ?? null,
-        payload: { scorerId: inc.playerId, assistId: inc.assistId ?? null, isPenalty: inc.class === 'penalty', isOwnGoal: inc.class === 'ownGoal', isHome: !!inc.isHome, scoreHome: inc.homeScore ?? null, scoreAway: inc.awayScore ?? null } });
+        payload: { scorerId: inc.playerId, isPenalty: inc.class === 'penalty', isOwnGoal: inc.class === 'ownGoal', isHome: !!inc.isHome, scoreHome: inc.homeScore ?? null, scoreAway: inc.awayScore ?? null } });
     } else if (inc.type === 'penalty_saved') {
       push({ sourceId: 'psave|' + inc.sourceId, type: 'penalty_saved', teamId: inc.teamId, playerId: inc.keeperId, minute: inc.time ?? null,
         payload: { keeperId: inc.keeperId ?? null, takerId: inc.takerId ?? null } });
@@ -80,6 +80,10 @@ export function deriveEvents(obs, existing = [], nowMs = Date.now()) {
 
   for (const [pid, rating] of Object.entries(obs.ratings || {})) {
     push({ sourceId: `rating|${pid}|${rating}`, type: 'rating', playerId: Number(pid), minute: obs.minute ?? null, payload: { rating } });
+  }
+
+  for (const [pid, count] of Object.entries(obs.assists || {})) {
+    push({ sourceId: `assist|${pid}|${count}`, type: 'assist', playerId: Number(pid), minute: obs.minute ?? null, payload: { asistencias: count } });
   }
 
   const folded = foldScore([...existing, ...out]);

@@ -18,7 +18,7 @@ test('expireAtEndOfDayUTC fija 23:59:59 UTC', () => {
 });
 
 test('EVENT_TYPES contiene los tipos esperados', () => {
-  assert.deepEqual(EVENT_TYPES, ['lineup','status','goal','goal_cancelled','penalty_saved','penalty_missed','card','substitution','rating','score','match_final']);
+  assert.deepEqual(EVENT_TYPES, ['lineup','status','goal','goal_cancelled','assist','penalty_saved','penalty_missed','card','substitution','rating','score','match_final']);
 });
 
 test('deriveEvents emite lineup y status una sola vez', () => {
@@ -38,10 +38,19 @@ test('deriveEvents emite gol con isHome y no lo duplica', () => {
   const g = evs.find(e => e.type === 'goal');
   assert.ok(g);
   assert.equal(g.payload.isHome, true);
-  assert.equal(g.payload.assistId, 12);
   assert.equal(g.minute, 22);
   const again = deriveEvents(o, evs, NOW);
   assert.equal(again.filter(e => e.type === 'goal').length, 0);
+});
+
+test('deriveEvents emite assist cuando sube el contador', () => {
+  const o = obs({ assists: { 12: 1 } });
+  const evs = deriveEvents(o, [], NOW);
+  const a = evs.find(e => e.type === 'assist');
+  assert.equal(a.payload.asistencias, 1);
+  assert.equal(a.playerId, 12);
+  const again = deriveEvents(o, evs, NOW);
+  assert.equal(again.filter(e => e.type === 'assist').length, 0);
 });
 
 test('foldScore suma goles y aplica cancelaciones', () => {

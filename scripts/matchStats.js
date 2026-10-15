@@ -78,6 +78,17 @@ export function buildTeamStats(goles, tandaPenaltis) {
     return stats;
 }
 
+export function buildAssistsMap(fantasyData) {
+    const assists = {};
+    if (fantasyData?.playerStatistics) {
+        for (const ps of fantasyData.playerStatistics) {
+            const a = ps.statistics?.find(s => s.key === 'assists');
+            if (a) assists[String(ps.playerId)] = parseInt(a.value, 10) || 0;
+        }
+    }
+    return assists;
+}
+
 export async function scrapMatchFull(eventId) {
     const eventUrl = `https://www.sofascore.com/api/v1/event/${eventId}`;
     const lineupsUrl = `https://www.sofascore.com/api/v1/event/${eventId}/lineups`;
@@ -99,15 +110,7 @@ export async function scrapMatchFull(eventId) {
         if (!notStarted) throw e;
     }
 
-    const assistsMap = {};
-    if (fantasyData?.playerStatistics) {
-        for (const ps of fantasyData.playerStatistics) {
-            const assistsStat = ps.statistics?.find(s => s.key === 'assists');
-            if (assistsStat) {
-                assistsMap[String(ps.playerId)] = parseInt(assistsStat.value, 10) || 0;
-            }
-        }
-    }
+    const assistsMap = buildAssistsMap(fantasyData);
 
     const homeTeamId = ev.homeTeam?.id;
     const awayTeamId = ev.awayTeam?.id;
@@ -260,6 +263,7 @@ export async function scrapMatchSource(eventId) {
         score: { home: ev.homeScore?.display ?? 0, away: ev.awayScore?.display ?? 0 },
         homeTeamId, awayTeamId,
         starters, ratings, minutes,
+        assists: buildAssistsMap(fantasyData),
         incidents: normalizeIncidents(incidentsData, homeTeamId, awayTeamId)
     };
 }

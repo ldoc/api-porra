@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeIncidents } from '../scripts/matchStats.js';
+import { normalizeIncidents, buildAssistsMap } from '../scripts/matchStats.js';
 
 test('normalizeIncidents mapea goal, penalty, card, sub, var', () => {
   const raw = { incidents: [
@@ -21,4 +21,12 @@ test('normalizeIncidents mapea goal, penalty, card, sub, var', () => {
   assert.equal(by('substitution').teamId, 1);
   assert.equal(by('penalty_saved').keeperId, 12);
   assert.equal(by('goal_cancelled').class, 'goalDisallowed');
+});
+
+test('buildAssistsMap extrae asistencias por jugador', () => {
+  const data = { playerStatistics: [
+    { playerId: 11, statistics: [{ key: 'assists', value: '2' }] },
+    { playerId: 12, statistics: [{ key: 'goals', value: '1' }] }
+  ] };
+  assert.deepEqual(buildAssistsMap(data), { 11: 2 });
 });
