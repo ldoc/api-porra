@@ -2,8 +2,9 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { connectDB, LiveMatch } from '../db/index.js';
-import { scrapMatchFull } from './matchStats.js';
+import { connectDB, LiveMatch, LiveEvent } from '../db/index.js';
+import { scrapMatchSource, scrapMatchFull } from './matchStats.js';
+import { deriveEvents } from '../api/liveEvents.js';
 import { selectLiveMatches, buildLiveDoc, liveStatusFromSofascore } from '../api/live.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -26,6 +27,7 @@ async function tick() {
   for (const m of live) {
     if (finished.has(m.id)) continue;
     try {
+      // 1) snapshot (respaldo) — mantiene el comportamiento actual
       const { stats, statusType, statusCode, minute } = await scrapMatchFull(m.id);
       const status = liveStatusFromSofascore(statusType, statusCode);
       if (!status) continue;
@@ -34,6 +36,20 @@ async function tick() {
         buildLiveDoc(m.id, stats, status, Date.now(), minute),
         { upsert: true, returnDocument: 'after' }
       );
+
+      // 2) eventos
+      const obs = await scrapMatchSource(m.id);
+      obs.status = status;
+      obs.kickoffMs = m.fecha * 1000; // ancla temporal al inicio programado
+      const existing = await LiveEvent.find({ eventId: m.id }, 'sourceId type payload').lean();
+      const nuevos = deriveEvents(obs, existing, Date.now());
+      if (nuevos.length) {
+        try {
+          await LiveEvent.insertMany(nuevos, { ordered: false });
+        } catch (e) {
+          if (e.code !== 11000) throw e; // duplicados: ignorar
+        }
+      }
       ok++;
     } catch (e) {
       console.error(`${stamp()} Fallo scrapeo ${m.id}: ${e.message}`);
