@@ -1279,7 +1279,9 @@ const server = http.createServer(async (req, res) => {
       }
       const filter = sinceResult.date ? { ts: { $gt: sinceResult.date } } : {};
       const docs = await LiveEvent.find(filter).sort({ ts: 1 }).lean();
-      sendJson(req, res, 200, buildLiveEventsResponse(docs));
+      const last = await LiveEvent.findOne({}, { ts: 1 }).sort({ ts: -1 }).lean();
+      const serverTime = last ? new Date(last.ts).toISOString() : null;
+      sendJson(req, res, 200, buildLiveEventsResponse(docs, serverTime));
     } catch (e) {
       sendJson(req, res, 500, { ok: false, error: 'Error al obtener eventos live' });
     }
