@@ -85,7 +85,7 @@ async function main() {
   const idsArg = String(arg('events', arg('event', DEFAULT_EVENTS)));
   const ids = idsArg.split(',').map(s => Number(s.trim())).filter(n => !Number.isNaN(n));
   const username = arg('user', null);
-  const tickSecs = Number(arg('tick', 15));
+  const tickSecs = Number(arg('tick', 10));
   const clean = !!arg('clean', false);
   const cleanOnly = !!arg('clean-only', false);
   const dry = !!arg('dry', false);
@@ -181,14 +181,16 @@ async function main() {
       console.log(`  [${M.match.equipoLocal.name.slice(0,3).toUpperCase()}] ⚽ Gol min ${min} (${scorer?.nombre ?? '?'}) · asist ${assister?.nombre ?? '?'}`);
     }
 
-    // Cambios de nota
-    if (sc.ratings.includes(min)) {
-      for (const squad of [homeSquad, awaySquad]) {
-        const p = lead(squad, 'M');
-        if (!p) continue;
-        const rating = +(6 + Math.min(3, min / 30)).toFixed(1);
-        out.push({ type: 'rating', minute: min, second: 0, teamId: p.equipo, playerId: p.id, sourceId: `${SIM_PREFIX}rating|${p.id}|${rating}`, ts: tsOf(min), payload: { rating } });
-      }
+    // Cambios de nota (varios jugadores por tick para darle vidilla al feed)
+    {
+      const picks = [
+        lead(homeSquad, 'M'), homeSquad[3], homeSquad[6],
+        lead(awaySquad, 'M'), awaySquad[3], awaySquad[6]
+      ].filter(Boolean);
+      picks.forEach((p, i) => {
+        const rating = +(6 + Math.min(3, min / 30) + (i % 3) * 0.1 + Math.random() * 0.2).toFixed(1);
+        out.push({ type: 'rating', minute: min, second: 0, teamId: p.equipo, playerId: p.id, sourceId: `${SIM_PREFIX}rating|${p.id}|${min}`, ts: tsOf(min), payload: { rating } });
+      });
     }
 
     // Tarjetas
