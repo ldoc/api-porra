@@ -28,7 +28,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { connectDB, User, LiveEvent } from '../db/index.js';
+import { connectDB, User, LiveEvent, MatchStats } from '../db/index.js';
 import { expireAtEndOfDayUTC } from '../api/liveEvents.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -47,7 +47,7 @@ function readDataJson(name) {
 function arg(name, def) {
   const i = process.argv.indexOf(`--${name}`);
   if (i < 0) return def;
-  if (['clean', 'dry', 'clean-only'].includes(name)) return true;
+  if (['clean', 'dry', 'clean-only', 'force'].includes(name)) return true;
   return process.argv[i + 1] ?? def;
 }
 
@@ -82,17 +82,40 @@ function scriptFor(idx) {
 }
 
 async function main() {
-  const idsArg = String(arg('events', arg('event', DEFAULT_EVENTS)));
-  const ids = idsArg.split(',').map(s => Number(s.trim())).filter(n => !Number.isNaN(n));
   const username = arg('user', null);
   const tickSecs = Number(arg('tick', 10));
   const clean = !!arg('clean', false);
   const cleanOnly = !!arg('clean-only', false);
   const dry = !!arg('dry', false);
+  const force = !!arg('force', false);
 
   const calendar = readDataJson('calendar.json');
   const allPlayers = readDataJson('jugadores.json');
   await connectDB();
+
+  // Elegir partidos SIN matchstat (si ya lo tienen, el front los excluye del live por diseño).
+  const have = new Set((await MatchStats.find({}, { eventId: 1 }).lean()).map(d => d.eventId));
+  const explicit = arg('events', null) || arg('event', null);
+  let ids;
+  if (explicit) {
+    ids = String(explicit).split(',').map(s => Number(s.trim())).filter(n => !Number.isNaN(n));
+  } else {
+    const nAuto = Number(arg('auto', 5));
+    const nowSecs = Math.floor(Date.now() / 1000);
+    const free = calendar.filter(m => !have.has(m.id));
+    const fut = free.filter(m => m.fecha >= nowSecs - 3600).sort((a, b) => a.fecha - b.fecha);
+    ids = (fut.length >= nAuto ? fut : free).slice(0, nAuto).map(m => m.id);
+  }
+  const clash = ids.filter(id => have.has(id));
+  if (clash.length) {
+    if (force) {
+      await MatchStats.deleteMany({ eventId: { $in: clash } });
+      console.log(`--force: borrados matchstats de ${clash.join(', ')} (el front los tratará como live).`);
+    } else {
+      console.warn(`AVISO: ya están en matchstats y el front los excluirá del live: ${clash.join(', ')}.`);
+      console.warn('Usa --force para borrar sus matchstats, o --auto para elegir otros partidos.');
+    }
+  }
 
   const cleanFilter = { eventId: { $in: ids }, sourceId: { $regex: `^${SIM_PREFIX.replace('|', '\\|')}` } };
   if (cleanOnly) {
