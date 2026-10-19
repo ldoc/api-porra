@@ -20,7 +20,7 @@ import { computeWeakEtag, etagMatches } from './api/etag.js';
 import { parseSinceParam } from './api/matchStatsFilter.js';
 import { calculateUserStandings, getLigaMatchIds, getMatchFaseMap } from './api/standings.js';
 import { guestReadFilter, canSeeGuests, bypassesGameLocks, guestEditingEnabled } from './api/guest.js';
-import { getLiveRefreshSecs, buildLiveResponse, buildLiveEventsResponse, liveEventsQuery, maxIngestedAt, liveEventsVersion, shouldReturn304 } from './api/live.js';
+import { getLiveRefreshSecs, buildLiveResponse, buildLiveEventsResponse, liveEventsQuery, maxIngestedAt, liveEventsVersion, shouldReturn304, buildLiveHealth } from './api/live.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -250,7 +250,7 @@ const server = http.createServer(async (req, res) => {
   // Bloqueo por mantenimiento: si está activo, solo pasan admins y endpoints de lectura de config/login
   // Esto capa a usuarios que ya tenían la web abierta (sus siguientes fetch recibirán 503)
   try {
-    const maintenancePathsAllowlist = ['/api/config', '/api/auth/login', '/'];
+    const maintenancePathsAllowlist = ['/api/config', '/api/auth/login', '/api/live/health', '/'];
     const isMaintenanceBypassPath =
       maintenancePathsAllowlist.includes(reqUrl.pathname) ||
       reqUrl.pathname === '/api/admin/maintenance';
@@ -1281,6 +1281,18 @@ const server = http.createServer(async (req, res) => {
       const status = e.message === 'NOT_FOUND' ? 404 : 500;
       const error = e.message === 'NOT_FOUND' ? 'Partido no encontrado en Sofascore' : 'Error al obtener estadísticas del partido';
       sendJson(req, res, status, { ok: false, error });
+    }
+    return;
+  }
+
+  // Endpoint: salud del scraper live (sin datos internos)
+  if (reqUrl.pathname === '/api/live/health' && req.method === 'GET') {
+    try {
+      const config = await GameConfig.findById('gameConfig', 'lastScrapeAt').lean();
+      res.setHeader('Cache-Control', 'no-store');
+      sendJson(req, res, 200, buildLiveHealth(config?.lastScrapeAt));
+    } catch (e) {
+      sendJson(req, res, 500, { ok: false, lastScrapeAt: null });
     }
     return;
   }

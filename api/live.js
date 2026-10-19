@@ -91,3 +91,25 @@ export function liveEventsQuery(sinceDate, { excludeSim = false } = {}) {
   if (excludeSim) filter.source = { $ne: 'sim' };
   return filter;
 }
+
+function nonNegativeInt(value) {
+  return Number.isFinite(value) && value > 0 ? Math.trunc(value) : 0;
+}
+
+export function buildScrapeLog({ startedMs, nowMs, live = 0, ok = 0, inserted = 0 } = {}) {
+  const at = Number.isFinite(nowMs) ? nowMs : Date.now();
+  const ms = Number.isFinite(startedMs) ? Math.max(0, at - startedMs) : 0;
+  return {
+    t: new Date(at).toISOString(),
+    live: nonNegativeInt(live),
+    ok: nonNegativeInt(ok),
+    inserted: nonNegativeInt(inserted),
+    ms
+  };
+}
+
+export function buildLiveHealth(lastScrapeAt) {
+  const date = lastScrapeAt instanceof Date ? lastScrapeAt : new Date(lastScrapeAt);
+  const valid = lastScrapeAt != null && !Number.isNaN(date.getTime());
+  return { ok: true, lastScrapeAt: valid ? date.toISOString() : null };
+}

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildLiveEventsResponse, liveEventsQuery, maxIngestedAt, liveEventsVersion, shouldReturn304 } from '../api/live.js';
+import { buildLiveEventsResponse, liveEventsQuery, maxIngestedAt, liveEventsVersion, shouldReturn304, buildScrapeLog, buildLiveHealth } from '../api/live.js';
 import { computeWeakEtag, etagMatches } from '../api/etag.js';
 
 test('buildLiveEventsResponse ordena por ts y usa el serverTime recibido', () => {
@@ -113,4 +113,39 @@ test('shouldReturn304 exige version, since, source y ETag coincidentes', () => {
 
 test('shouldReturn304 sin cache no devuelve 304', () => {
   assert.equal(shouldReturn304({ cached: null, version: 'v1', since: '', ifNoneMatch: 'W/"abc"' }), false);
+});
+
+test('buildScrapeLog emite el log estructurado del tick', () => {
+  const log = buildScrapeLog({
+    startedMs: Date.parse('2026-09-16T20:00:00Z'),
+    nowMs: Date.parse('2026-09-16T20:00:02Z'),
+    live: 3,
+    ok: 2,
+    inserted: 5
+  });
+  assert.deepEqual(log, {
+    t: '2026-09-16T20:00:02.000Z',
+    live: 3,
+    ok: 2,
+    inserted: 5,
+    ms: 2000
+  });
+});
+
+test('buildScrapeLog normaliza contadores y ms', () => {
+  const log = buildScrapeLog({ startedMs: 2000, nowMs: 1000 });
+  assert.deepEqual(log, {
+    t: '1970-01-01T00:00:01.000Z',
+    live: 0,
+    ok: 0,
+    inserted: 0,
+    ms: 0
+  });
+});
+
+test('buildLiveHealth expone solo ok y lastScrapeAt', () => {
+  assert.deepEqual(buildLiveHealth(null), { ok: true, lastScrapeAt: null });
+  const d = new Date('2026-09-16T20:00:00Z');
+  assert.deepEqual(buildLiveHealth(d), { ok: true, lastScrapeAt: '2026-09-16T20:00:00.000Z' });
+  assert.deepEqual(buildLiveHealth(new Date('invalid')), { ok: true, lastScrapeAt: null });
 });

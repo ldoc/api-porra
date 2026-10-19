@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import LiveEvent from '../db/models/LiveEvent.js';
+import { deriveEvents } from '../api/liveEvents.js';
 
 test('LiveEvent declara colección liveevents e índices', () => {
   assert.equal(LiveEvent.collection.name, 'liveevents');
@@ -37,4 +38,11 @@ test('LiveEvent declara seq, source e índice {eventId, ts}', () => {
   const idx = LiveEvent.schema.indexes();
   const evTs = idx.find(([keys]) => keys.eventId === 1 && keys.ts === 1);
   assert.ok(evTs, 'falta índice {eventId, ts}');
+});
+
+test('expireAt usa el dia del kickoff, no el de ingesta', () => {
+  const kickoff = Date.parse('2026-09-16T22:30:00Z');
+  const ingest = Date.parse('2026-09-17T00:10:00Z');
+  const evs = deriveEvents({ eventId: 1, status: 'FT', kickoffMs: kickoff, score: { home: 0, away: 0 } }, [], ingest);
+  assert.equal(new Date(evs[0].expireAt).toISOString(), '2026-09-16T23:59:59.000Z');
 });
