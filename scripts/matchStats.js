@@ -99,28 +99,38 @@ export function buildAssistsMap(fantasyData) {
     return assists;
 }
 
-export async function fetchMatchData(eventId) {
+export async function fetchMatchData(eventId, { lineupsData, fantasyData } = {}) {
     const eventUrl = `https://www.sofascore.com/api/v1/event/${eventId}`;
     const lineupsUrl = `https://www.sofascore.com/api/v1/event/${eventId}/lineups`;
     const incidentsUrl = `https://www.sofascore.com/api/v1/event/${eventId}/incidents`;
     const fantasyUrl = `https://www.sofascore.com/api/v1/fantasy/event/${eventId}`;
 
-    const [eventData, incidentsData, fantasyData] = await Promise.all([
+    const [eventData, incidentsData, fetchedFantasyData] = await Promise.all([
         fetchSofascore(eventUrl),
         fetchSofascore(incidentsUrl).catch(() => null),
-        fetchSofascore(fantasyUrl).catch(() => null)
+        fantasyData === undefined
+            ? fetchSofascore(fantasyUrl).catch(() => null)
+            : Promise.resolve(fantasyData)
     ]);
 
     const ev = eventData.event;
     const notStarted = ev.status?.type === 'notstarted' || ev.status?.type === 'willsoonstart';
-    let lineupsData = null;
-    try {
-        lineupsData = await fetchSofascore(lineupsUrl);
-    } catch (e) {
-        if (!notStarted) throw e;
+    let fetchedLineupsData = lineupsData;
+    if (fetchedLineupsData === undefined) {
+        fetchedLineupsData = null;
+        try {
+            fetchedLineupsData = await fetchSofascore(lineupsUrl);
+        } catch (e) {
+            if (!notStarted) throw e;
+        }
     }
 
-    return { eventData, incidentsData, fantasyData, lineupsData };
+    return {
+        eventData,
+        incidentsData,
+        fantasyData: fetchedFantasyData,
+        lineupsData: fetchedLineupsData
+    };
 }
 
 export async function scrapMatchFull(eventId, raw = null) {

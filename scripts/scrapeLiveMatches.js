@@ -6,10 +6,12 @@ import { connectDB, LiveMatch, LiveEvent } from '../db/index.js';
 import { scrapMatchSource, scrapMatchFull, fetchMatchData } from './matchStats.js';
 import { deriveEvents, LIVE_EXISTING_PROJECTION } from '../api/liveEvents.js';
 import { selectLiveMatches, buildLiveDoc, liveStatusFromSofascore } from '../api/live.js';
+import { liveSnapshotHash, isDuplicateWriteError } from './liveScraper.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const INTERVAL_MS = 30_000;
 const CALENDAR_REFRESH_MS = 10 * 60_000;
+const FANTASY_TTL_MS = 60_000;
 const ONCE = process.argv.includes('--once');
 const calendarPath = path.join(__dirname, '../data/sofascore/calendar.json');
 
@@ -17,6 +19,8 @@ const loadCalendar = () => JSON.parse(fs.readFileSync(calendarPath, 'utf-8'));
 let calendar = loadCalendar();
 let calendarLoadedAt = Date.now();
 const lastSnapshotHash = new Map();
+const lineupsCache = new Map();
+const fantasyCache = new Map();
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const stamp = () => new Date().toISOString();
 
@@ -58,56 +62,75 @@ async function tick() {
   }
 
   const ops = [];
-  let ok = 0;
+  const pending = [];
   let skipped = 0;
   for (const m of live) {
     if (finished.has(m.id)) continue;
     try {
-      // 1) datos Sofascore una sola vez por partido (4 endpoints)
-      const raw = await fetchMatchData(m.id);
+      const now = Date.now();
+      const cachedLineups = lineupsCache.get(m.id);
+      const cachedFantasy = fantasyCache.get(m.id);
+      const fantasyFresh = !!cachedFantasy && now - cachedFantasy.at < FANTASY_TTL_MS;
 
-      // 2) eventos ANTES del snapshot: un fallo posterior no debe marcar FT sin eventos
+      // 1) datos Sofascore: event+incidents siempre; lineups una vez; fantasy cada 60s
+      const raw = await fetchMatchData(m.id, {
+        lineupsData: cachedLineups,
+        fantasyData: fantasyFresh ? cachedFantasy.data : undefined
+      });
+      if (raw.lineupsData) lineupsCache.set(m.id, raw.lineupsData);
+      if (!fantasyFresh && raw.fantasyData) {
+        fantasyCache.set(m.id, { data: raw.fantasyData, at: Date.now() });
+      }
+
+      // 2) observación y eventos ANTES de snapshot/hash
       const obs = await scrapMatchSource(m.id, raw);
       const status = liveStatusFromSofascore(obs.statusType, obs.statusCode);
       if (!status) continue;
       obs.status = status;
       obs.kickoffMs = m.fecha * 1000; // ancla temporal al inicio programado
 
-      const hash = JSON.stringify({
-        s: obs.status,
-        m: obs.minute,
-        h: obs.score?.home,
-        a: obs.score?.away,
-        i: (obs.incidents || []).length
-      });
+      const hash = liveSnapshotHash(obs);
       if (lastSnapshotHash.get(m.id) === hash) { skipped++; continue; }
 
-      for (const ev of deriveEvents(obs, existingByMatch.get(m.id) || [], Date.now())) {
-        ops.push({ insertOne: { document: ev } });
-      }
+      const nuevos = deriveEvents(obs, existingByMatch.get(m.id) || [], Date.now());
+      for (const ev of nuevos) ops.push({ insertOne: { document: ev } });
 
-      // 3) snapshot (respaldo) — mantiene el comportamiento actual
+      // 3) snapshot se persiste solo tras confirmar el flush de eventos
       const { stats, minute } = await scrapMatchFull(m.id, raw);
-      await LiveMatch.findOneAndUpdate(
-        { eventId: m.id },
-        buildLiveDoc(m.id, stats, status, Date.now(), minute),
-        { upsert: true, returnDocument: 'after' }
-      );
-      lastSnapshotHash.set(m.id, hash);
-      ok++;
+      const snapshotDoc = buildLiveDoc(m.id, stats, status, Date.now(), minute);
+      pending.push({ match: m, snapshotDoc, hash, eventCount: nuevos.length });
     } catch (e) {
       console.error(`${stamp()} Fallo scrapeo ${m.id}: ${e.message}`);
     }
   }
 
+  // Invariante: eventos antes que snapshots/hashes. Ante error real no se avanza nada.
   if (ops.length) {
     try {
       await LiveEvent.bulkWrite(ops, { ordered: false });
     } catch (e) {
-      if (e.code !== 11000 && !Array.isArray(e.writeErrors)) throw e; // duplicados: ignorar
+      if (!isDuplicateWriteError(e)) {
+        console.error(`${stamp()} Fallo bulkWrite de eventos: ${e.message}; snapshots y hashes no avanzan`);
+        return;
+      }
     }
   }
-  console.log(`${stamp()} Guardados: ${ok}/${live.length} (sin cambios: ${skipped})`);
+
+  let ok = 0;
+  for (const { match, snapshotDoc, hash } of pending) {
+    try {
+      await LiveMatch.findOneAndUpdate(
+        { eventId: match.id },
+        snapshotDoc,
+        { upsert: true, returnDocument: 'after' }
+      );
+      lastSnapshotHash.set(match.id, hash);
+      ok++;
+    } catch (e) {
+      console.error(`${stamp()} Fallo snapshot ${match.id}: ${e.message}`);
+    }
+  }
+  console.log(`${stamp()} Guardados: ${ok}/${live.length} (sin cambios: ${skipped}, eventos: ${ops.length})`);
 }
 
 await connectDB();
