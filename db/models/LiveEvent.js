@@ -5,6 +5,7 @@ const liveEventSchema = new mongoose.Schema({
   ingestedAt: { type: Date, required: true, index: true },
   ts: { type: Date, required: true, index: true },
   minute: { type: Number, default: null },
+  addedTime: { type: Number, default: null },
   second: { type: Number, default: 0 },
   type: { type: String, required: true },
   teamId: { type: Number, default: null },

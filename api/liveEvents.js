@@ -3,11 +3,20 @@ export const EVENT_TYPES = [
   'penalty_missed', 'card', 'substitution', 'rating', 'score', 'match_final'
 ];
 
-export const LIVE_EXISTING_PROJECTION = 'sourceId type payload teamId playerId minute seq ts';
+export const LIVE_EXISTING_PROJECTION = 'sourceId type payload teamId playerId minute addedTime seq ts ingestedAt';
 
 export function expireAtEndOfDayUTC(nowMs) {
   const d = new Date(nowMs);
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 23, 59, 59, 0));
+}
+
+// The event must survive until the end of the match even if kickoff is near
+// midnight, so keep the later of end-of-day and kickoff + 3h.
+export function liveEventExpireAt(kickoffMs) {
+  return new Date(Math.max(
+    expireAtEndOfDayUTC(kickoffMs).getTime(),
+    kickoffMs + 3 * 3600 * 1000
+  ));
 }
 
 const TYPE_RANK = {
@@ -49,10 +58,26 @@ export function foldScore(events) {
 let _rev = 0;
 function rev() { _rev += 1; return `${Date.now().toString(36)}-${_rev.toString(36)}`; }
 
+function timeOf(value) {
+  const t = new Date(value).getTime();
+  return Number.isFinite(t) ? t : 0;
+}
+
+// Total order used to pick the latest absolute value. `ingestedAt` comes
+// before `seq` because `seq` restarts at 0 on every tick: comparing seq across
+// ticks would let an older tick win a same-ts A→B→A correction.
+function compareEvents(a, b) {
+  const t = timeOf(a.ts) - timeOf(b.ts);
+  if (t) return t;
+  const i = timeOf(a.ingestedAt) - timeOf(b.ingestedAt);
+  if (i) return i;
+  const s = (a.seq || 0) - (b.seq || 0);
+  if (s) return s;
+  return String(a.sourceId || '').localeCompare(String(b.sourceId || ''));
+}
+
 function isNewer(a, b) {
-  const t = new Date(a.ts).getTime() - new Date(b.ts).getTime();
-  if (t) return t > 0;
-  return (a.seq || 0) >= (b.seq || 0);
+  return compareEvents(a, b) > 0;
 }
 
 function latestEvent(events, type) {
@@ -79,10 +104,7 @@ export function deriveEvents(obs, existing = [], nowMs = Date.now()) {
   const have = new Set(existing.map(e => e.sourceId));
   const out = [];
   const kickoff = obs.kickoffMs != null ? obs.kickoffMs : nowMs;
-  const expireAt = new Date(Math.max(
-    expireAtEndOfDayUTC(kickoff).getTime(),
-    kickoff + 3 * 3600 * 1000
-  ));
+  const expireAt = liveEventExpireAt(kickoff);
   const source = obs.source || 'scraper';
   let seq = 0;
   const push = (ev) => {
@@ -91,7 +113,7 @@ export function deriveEvents(obs, existing = [], nowMs = Date.now()) {
     out.push({
       eventId: obs.eventId, ingestedAt: new Date(nowMs),
       ts: ev.ts ?? tsOfMinute(obs.kickoffMs, ev.minute, ev.addedTime, nowMs),
-      second: 0, minute: ev.minute ?? null, type: ev.type,
+      second: 0, minute: ev.minute ?? null, addedTime: ev.addedTime ?? null, type: ev.type,
       teamId: ev.teamId ?? null, playerId: ev.playerId ?? null,
       sourceId: ev.sourceId, seq: seq++, source,
       payload: ev.payload ?? {}, expireAt
@@ -123,8 +145,11 @@ export function deriveEvents(obs, existing = [], nowMs = Date.now()) {
   });
   for (const inc of incidents) {
     if (inc.type === 'goal') {
+      const assistPlayerIds = Array.isArray(inc.assistPlayerIds)
+        ? inc.assistPlayerIds.map(Number).filter(Number.isFinite)
+        : (inc.assistId != null ? [Number(inc.assistId)] : []);
       push({ sourceId: 'goal|' + inc.sourceId, type: 'goal', teamId: inc.teamId, playerId: inc.playerId, minute: inc.time ?? null, addedTime: inc.addedTime ?? null,
-        payload: { scorerId: inc.playerId, isPenalty: inc.class === 'penalty', isOwnGoal: inc.class === 'ownGoal', isHome: !!inc.isHome, scoreHome: inc.homeScore ?? null, scoreAway: inc.awayScore ?? null } });
+        payload: { scorerId: inc.playerId, assistPlayerIds, isPenalty: inc.class === 'penalty', isOwnGoal: inc.class === 'ownGoal', isHome: !!inc.isHome, scoreHome: inc.homeScore ?? null, scoreAway: inc.awayScore ?? null } });
     } else if (inc.type === 'penalty_saved') {
       push({ sourceId: 'psave|' + inc.sourceId, type: 'penalty_saved', teamId: inc.teamId, playerId: inc.keeperId, minute: inc.time ?? null, addedTime: inc.addedTime ?? null,
         payload: { keeperId: inc.keeperId ?? null, takerId: inc.takerId ?? null } });
@@ -204,6 +229,6 @@ function findGoalToCancel(inc, existing, out) {
     return true;
   });
   if (!mine.length) return null;
-  mine.sort((a, b) => (new Date(a.ts).getTime() - new Date(b.ts).getTime()) || ((a.seq || 0) - (b.seq || 0)));
+  mine.sort(compareEvents);
   return mine[mine.length - 1].sourceId;
 }

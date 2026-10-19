@@ -31,10 +31,12 @@ test('LiveEvent declara índice delta {source, ingestedAt}', () => {
   assert.ok(delta, 'falta índice {source, ingestedAt} para la version/delta');
 });
 
-test('LiveEvent declara seq, source e índice {eventId, ts}', () => {
+test('LiveEvent declara seq, source, addedTime e índice {eventId, ts}', () => {
   assert.equal(LiveEvent.schema.path('seq').instance, 'Number');
   assert.equal(LiveEvent.schema.path('seq').defaultValue, 0);
   assert.equal(LiveEvent.schema.path('source').defaultValue, 'scraper');
+  assert.equal(LiveEvent.schema.path('addedTime').instance, 'Number');
+  assert.equal(LiveEvent.schema.path('addedTime').defaultValue, null);
   const idx = LiveEvent.schema.indexes();
   const evTs = idx.find(([keys]) => keys.eventId === 1 && keys.ts === 1);
   assert.ok(evTs, 'falta índice {eventId, ts}');

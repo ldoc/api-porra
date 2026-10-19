@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { deriveEvents, foldScore, expireAtEndOfDayUTC, EVENT_TYPES, LIVE_EXISTING_PROJECTION } from '../api/liveEvents.js';
+import { deriveEvents, foldScore, expireAtEndOfDayUTC, liveEventExpireAt, EVENT_TYPES, LIVE_EXISTING_PROJECTION } from '../api/liveEvents.js';
 
 const NOW = Date.parse('2026-09-16T20:00:00Z');
 
@@ -388,7 +388,69 @@ test('findGoalToCancel respeta el limite de 5 minutos', () => {
 
 test('LIVE_EXISTING_PROJECTION incluye los campos que usa deriveEvents', () => {
   const fields = LIVE_EXISTING_PROJECTION.split(' ');
-  for (const f of ['playerId', 'teamId', 'minute', 'seq', 'ts']) {
+  for (const f of ['playerId', 'teamId', 'minute', 'addedTime', 'seq', 'ts', 'ingestedAt']) {
     assert.ok(fields.includes(f), `falta ${f}`);
   }
+});
+
+test('liveEventExpireAt usa el mayor de fin de dia y kickoff + 3h', () => {
+  const early = Date.parse('2026-09-16T10:00:00Z');
+  assert.equal(liveEventExpireAt(early).toISOString(), '2026-09-16T23:59:59.000Z');
+  const late = Date.parse('2026-09-16T23:00:00Z');
+  assert.equal(liveEventExpireAt(late).toISOString(), '2026-09-17T02:00:00.000Z');
+});
+
+test('deriveEvents persiste addedTime en el evento', () => {
+  const kickoffMs = Date.parse('2026-09-16T20:00:00Z');
+  const o = obs({ kickoffMs, score: { home: 1, away: 0 }, incidents: [
+    { sourceId: 'g', type: 'goal', class: 'regular', time: 45, addedTime: 2, isHome: true, playerId: 11, homeScore: 1, awayScore: 0, teamId: 1 }
+  ] });
+  const g = deriveEvents(o, [], NOW).find(e => e.type === 'goal');
+  assert.equal(g.addedTime, 2);
+  assert.equal(new Date(g.ts).toISOString(), '2026-09-16T20:47:00.000Z');
+});
+
+test('deriveEvents incluye assistPlayerIds en el payload del gol', () => {
+  const o = obs({ score: { home: 1, away: 0 }, incidents: [
+    { sourceId: 'g', type: 'goal', class: 'regular', time: 22, isHome: true, playerId: 11, assistId: 12, homeScore: 1, awayScore: 0, teamId: 1 }
+  ] });
+  const g = deriveEvents(o, [], NOW).find(e => e.type === 'goal');
+  assert.deepEqual(g.payload.assistPlayerIds, [12]);
+});
+
+test('rating same-ts A→B→A elige el maximo por ingestedAt aunque el array venga desordenado', () => {
+  const kickoffMs = Date.parse('2026-09-16T20:00:00Z');
+  const o = (rating) => obs({ kickoffMs, minute: 30, ratings: { 11: rating } });
+  const a = deriveEvents(o(7.0), [], NOW);
+  const b = deriveEvents(o(7.5), a, NOW + 1000);
+  const aRating = a.find(e => e.type === 'rating');
+  const bRating = b.find(e => e.type === 'rating');
+  const c = deriveEvents(o(7.0), [bRating, aRating], NOW + 2000);
+  assert.equal(new Date(c.find(e => e.type === 'rating').ts).getTime(),
+    new Date(aRating.ts).getTime());
+  assert.equal(c.find(e => e.type === 'rating').payload.rating, 7.0);
+});
+
+test('assist same-ts A→B→A elige el maximo por ingestedAt aunque el array venga desordenado', () => {
+  const kickoffMs = Date.parse('2026-09-16T20:00:00Z');
+  const o = (count) => obs({ kickoffMs, minute: 30, assists: { 12: count } });
+  const a = deriveEvents(o(1), [], NOW);
+  const b = deriveEvents(o(2), a, NOW + 1000);
+  const aAssist = a.find(e => e.type === 'assist');
+  const bAssist = b.find(e => e.type === 'assist');
+  const c = deriveEvents(o(1), [bAssist, aAssist], NOW + 2000);
+  assert.equal(c.find(e => e.type === 'assist').payload.asistencias, 1);
+});
+
+test('own goal y su anulacion dejan el marcador a cero', () => {
+  const o = obs({ score: { home: 0, away: 0 }, incidents: [
+    { sourceId: 'og', type: 'goal', class: 'ownGoal', time: 20, isHome: true, playerId: 11, homeScore: 0, awayScore: 1, teamId: 1 },
+    { sourceId: 'v', type: 'goal_cancelled', class: 'goalDisallowed', time: 21, teamId: 1, playerId: 11 }
+  ] });
+  const evs = deriveEvents(o, [], NOW);
+  const goal = evs.find(e => e.type === 'goal');
+  assert.equal(goal.payload.isOwnGoal, true);
+  const cancel = evs.find(e => e.type === 'goal_cancelled');
+  assert.equal(cancel.payload.ofSourceId, 'goal|og');
+  assert.deepEqual(foldScore(evs), { home: 0, away: 0 });
 });
