@@ -55,11 +55,23 @@ export function buildLiveResponse(docs) {
   return { ok: true, liveMatches, serverTime: max ? new Date(max).toISOString() : null };
 }
 
-export function buildLiveEventsResponse(docs, serverTime = null) {
-  const events = [...(docs || [])].sort((a, b) => new Date(a.ts) - new Date(b.ts));
-  return { ok: true, events, serverTime: serverTime ?? null };
+export function maxIngestedAt(docs) {
+  return (docs || []).reduce((max, d) => {
+    const t = d.ingestedAt ? new Date(d.ingestedAt).getTime() : 0;
+    return t > max ? t : max;
+  }, 0);
 }
 
-export function liveEventsQuery(sinceDate) {
-  return sinceDate ? { ingestedAt: { $gt: sinceDate } } : {};
+export function buildLiveEventsResponse(docs, serverTime = null, resync = false) {
+  const events = [...(docs || [])].sort((a, b) => {
+    const t = new Date(a.ts).getTime() - new Date(b.ts).getTime();
+    return t || ((a.seq || 0) - (b.seq || 0));
+  });
+  return { ok: true, events, serverTime: serverTime ?? null, resync: !!resync };
+}
+
+export function liveEventsQuery(sinceDate, { excludeSim = false } = {}) {
+  const filter = sinceDate ? { ingestedAt: { $gt: sinceDate } } : {};
+  if (excludeSim) filter.source = { $ne: 'sim' };
+  return filter;
 }

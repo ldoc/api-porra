@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildLiveEventsResponse, liveEventsQuery } from '../api/live.js';
+import { buildLiveEventsResponse, liveEventsQuery, maxIngestedAt } from '../api/live.js';
 import { computeWeakEtag, etagMatches } from '../api/etag.js';
 
 test('buildLiveEventsResponse ordena por ts y usa el serverTime recibido', () => {
@@ -11,13 +11,46 @@ test('buildLiveEventsResponse ordena por ts y usa el serverTime recibido', () =>
   const res = buildLiveEventsResponse(docs, '2026-09-16T20:06:00.000Z');
   assert.deepEqual(res.events.map(d => d._id), ['a', 'b']);
   assert.equal(res.serverTime, '2026-09-16T20:06:00.000Z');
-  assert.deepEqual(buildLiveEventsResponse([], null), { ok: true, events: [], serverTime: null });
+  assert.deepEqual(buildLiveEventsResponse([], null), { ok: true, events: [], serverTime: null, resync: false });
+});
+
+test('buildLiveEventsResponse ordena por ts y desempata por seq', () => {
+  const docs = [
+    { _id: 'b', ts: new Date('2026-09-16T20:01:00Z'), seq: 2 },
+    { _id: 'c', ts: new Date('2026-09-16T20:01:00Z'), seq: 1 },
+    { _id: 'a', ts: new Date('2026-09-16T20:00:00Z'), seq: 9 }
+  ];
+  const res = buildLiveEventsResponse(docs, null);
+  assert.deepEqual(res.events.map(d => d._id), ['a', 'c', 'b']);
+});
+
+test('buildLiveEventsResponse expone resync', () => {
+  assert.equal(buildLiveEventsResponse([], null, true).resync, true);
+  assert.equal(buildLiveEventsResponse([], null).resync, false);
+});
+
+test('serverTime usa el maximo de los docs devueltos (no el global)', () => {
+  const docs = [
+    { _id: 'a', ingestedAt: new Date('2026-09-16T20:01:00Z') },
+    { _id: 'b', ingestedAt: new Date('2026-09-16T20:03:00Z') }
+  ];
+  const res = buildLiveEventsResponse(docs, new Date(maxIngestedAt(docs)).toISOString());
+  assert.equal(res.serverTime, '2026-09-16T20:03:00.000Z');
 });
 
 test('liveEventsQuery construye el filtro delta por ingestedAt', () => {
   assert.deepEqual(liveEventsQuery(null), {});
   const since = new Date('2026-09-16T20:00:00Z');
   assert.deepEqual(liveEventsQuery(since), { ingestedAt: { $gt: since } });
+});
+
+test('liveEventsQuery excluye sim por defecto', () => {
+  assert.deepEqual(liveEventsQuery(null, { excludeSim: true }), { source: { $ne: 'sim' } });
+  const since = new Date('2026-09-16T20:00:00Z');
+  assert.deepEqual(liveEventsQuery(since, { excludeSim: true }), {
+    ingestedAt: { $gt: since },
+    source: { $ne: 'sim' }
+  });
 });
 
 test('delta por ingestedAt excluye el cursor y toma serverTime = max(ingestedAt)', () => {
