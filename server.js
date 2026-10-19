@@ -136,11 +136,13 @@ function setCorsHeaders(req, res) {
     'http://localhost:3000',
     'http://localhost:8080'
   ];
-  if (allowedOrigins.includes(origin) || (origin && origin.startsWith('http://localhost'))) {
+  const isLocal = /^http:\/\/localhost(:\d+)?$/.test(origin || '');
+  if (allowedOrigins.includes(origin) || isLocal) {
     res.setHeader('Access-Control-Allow-Origin', origin);
   } else {
     res.setHeader('Access-Control-Allow-Origin', FRONTEND_URL);
   }
+  res.setHeader('Vary', 'Origin');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Client-Phase');
 }
@@ -207,6 +209,12 @@ function sendJsonPrivate(req, res, statusCode, data, cacheSeconds) {
     res.setHeader('Cache-Control', `private, max-age=${cacheSeconds}, stale-while-revalidate=${cacheSeconds * 2}`);
   }
   sendJson(req, res, statusCode, data);
+}
+
+if (process.env.NODE_ENV === 'production'
+  && (!JWT_SECRET || JWT_SECRET === 'porra-ucl-champions-2026-secret-key-change-in-production')) {
+  console.error('JWT_SECRET inseguro en produccion');
+  process.exit(1);
 }
 
 await connectDB();

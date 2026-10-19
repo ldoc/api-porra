@@ -17,6 +17,14 @@ export function authenticate(req) {
   }
 }
 
+export function clientIp(req) {
+  if (process.env.TRUST_PROXY === '1') {
+    const xff = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+    if (/^[0-9a-fA-F:.]{3,45}$/.test(xff)) return xff;
+  }
+  return req.socket?.remoteAddress || 'unknown';
+}
+
 export function rateLimiter({ windowMs = 15 * 60 * 1000, max = 10, keyFn } = {}) {
   const hits = new Map();
 
@@ -28,7 +36,7 @@ export function rateLimiter({ windowMs = 15 * 60 * 1000, max = 10, keyFn } = {})
   }, windowMs);
 
   return function checkRateLimit(req) {
-    const key = keyFn ? keyFn(req) : (req.headers['x-forwarded-for'] || req.socket.remoteAddress);
+    const key = keyFn ? keyFn(req) : clientIp(req);
     const now = Date.now();
     const entry = hits.get(key);
 

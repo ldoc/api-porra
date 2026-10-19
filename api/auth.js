@@ -147,9 +147,21 @@ export async function getAllPlayers(filter = {}) {
   }));
 }
 
+export function isValidAvatar(value) {
+  if (typeof value !== 'string') return false;
+  const v = value.trim();
+  if (!v || v.length > 200) return false;
+  if (/^https:\/\/\S+$/.test(v)) return true;
+  return !/[<>&"'`]/.test(v);
+}
+
 export async function saveProfile(username, profileData) {
   if (!username) {
     return { ok: false, error: 'Usuario requerido' };
+  }
+
+  if (profileData.avatar != null && !isValidAvatar(profileData.avatar)) {
+    return { ok: false, error: 'Avatar inválido' };
   }
 
   const user = await User.findOne({ username: username.toLowerCase() });
