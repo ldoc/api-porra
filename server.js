@@ -20,7 +20,7 @@ import { computeWeakEtag, etagMatches } from './api/etag.js';
 import { parseSinceParam } from './api/matchStatsFilter.js';
 import { calculateUserStandings, getLigaMatchIds, getMatchFaseMap } from './api/standings.js';
 import { guestReadFilter, canSeeGuests, bypassesGameLocks, guestEditingEnabled } from './api/guest.js';
-import { getLiveRefreshSecs, buildLiveResponse, buildLiveEventsResponse, liveEventsQuery, maxIngestedAt, shouldReturn304 } from './api/live.js';
+import { getLiveRefreshSecs, buildLiveResponse, buildLiveEventsResponse, liveEventsQuery, maxIngestedAt, liveEventsVersion, shouldReturn304 } from './api/live.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -38,13 +38,16 @@ const liveNoSinceLimiter = rateLimiter({ windowMs: 60 * 1000, max: 30, keyFn: cl
 let liveVersionCache = { key: null, version: null, at: 0 };
 let liveBodyCache = { source: null, version: null, since: null, etag: null };
 
-async function currentLiveVersion(filter) {
-  const key = JSON.stringify(filter);
+async function currentLiveVersion(sourceFilter) {
+  const key = JSON.stringify(sourceFilter);
   if (liveVersionCache.key === key && Date.now() - liveVersionCache.at < 2000) {
     return liveVersionCache.version;
   }
-  const last = await LiveEvent.findOne(filter, { ingestedAt: 1 }).sort({ ingestedAt: -1 }).lean();
-  const version = last ? new Date(last.ingestedAt).toISOString() : null;
+  const last = await LiveEvent.findOne(
+    { ...sourceFilter, expireAt: { $gt: new Date() } },
+    { ingestedAt: 1 }
+  ).sort({ ingestedAt: -1 }).lean();
+  const version = last ? liveEventsVersion([last]) : null;
   liveVersionCache = { key, version, at: Date.now() };
   return version;
 }
@@ -1298,6 +1301,14 @@ const server = http.createServer(async (req, res) => {
       const sinceKey = sinceResult.date ? sinceResult.date.toISOString() : '';
       const version = await currentLiveVersion(sourceFilter);
 
+      if (!sinceResult.date) {
+        const rate = liveNoSinceLimiter(req);
+        if (!rate.ok) {
+          sendJson(req, res, rate.status, { ok: false, error: rate.error });
+          return;
+        }
+      }
+
       if (shouldReturn304({
         cached: liveBodyCache,
         version,
@@ -1311,14 +1322,6 @@ const server = http.createServer(async (req, res) => {
         });
         res.end();
         return;
-      }
-
-      if (!sinceResult.date) {
-        const rate = liveNoSinceLimiter(req);
-        if (!rate.ok) {
-          sendJson(req, res, rate.status, { ok: false, error: rate.error });
-          return;
-        }
       }
 
       const filter = liveEventsQuery(sinceResult.date, { excludeSim: !wantSim });
