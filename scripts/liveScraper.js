@@ -19,8 +19,25 @@ export function liveSnapshotHash(obs) {
 
 export function isDuplicateWriteError(e) {
   if (!e) return false;
-  if (e.code === 11000) return true;
-  return Array.isArray(e.writeErrors) &&
-    e.writeErrors.length > 0 &&
-    e.writeErrors.every(w => w?.code === 11000);
+  const errors = Array.isArray(e.writeErrors) ? e.writeErrors : [];
+  if (errors.length) return errors.every(w => w.code === 11000);
+  return e.code === 11000;
+}
+
+export function shouldRefreshLineups({
+  cachedAt,
+  statusKey,
+  cachedStatusKey,
+  hasSubstitution,
+  nowMs,
+  ttlMs = 300000
+}) {
+  if (cachedAt == null) return true;
+  if (hasSubstitution) return true;
+  if (statusKey !== cachedStatusKey) return true;
+  return nowMs - cachedAt >= ttlMs;
+}
+
+export function isCacheableLineups(data) {
+  return !!(data?.home?.players?.length && data?.away?.players?.length);
 }

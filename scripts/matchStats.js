@@ -99,9 +99,12 @@ export function buildAssistsMap(fantasyData) {
     return assists;
 }
 
+export async function fetchLineups(eventId) {
+    return fetchSofascore(`https://www.sofascore.com/api/v1/event/${eventId}/lineups`);
+}
+
 export async function fetchMatchData(eventId, { lineupsData, fantasyData } = {}) {
     const eventUrl = `https://www.sofascore.com/api/v1/event/${eventId}`;
-    const lineupsUrl = `https://www.sofascore.com/api/v1/event/${eventId}/lineups`;
     const incidentsUrl = `https://www.sofascore.com/api/v1/event/${eventId}/incidents`;
     const fantasyUrl = `https://www.sofascore.com/api/v1/fantasy/event/${eventId}`;
 
@@ -119,7 +122,7 @@ export async function fetchMatchData(eventId, { lineupsData, fantasyData } = {})
     if (fetchedLineupsData === undefined) {
         fetchedLineupsData = null;
         try {
-            fetchedLineupsData = await fetchSofascore(lineupsUrl);
+            fetchedLineupsData = await fetchLineups(eventId);
         } catch (e) {
             if (!notStarted) throw e;
         }

@@ -3,10 +3,15 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { connectDB, LiveMatch, LiveEvent } from '../db/index.js';
-import { scrapMatchSource, scrapMatchFull, fetchMatchData } from './matchStats.js';
+import { scrapMatchSource, scrapMatchFull, fetchMatchData, fetchLineups } from './matchStats.js';
 import { deriveEvents, LIVE_EXISTING_PROJECTION } from '../api/liveEvents.js';
 import { selectLiveMatches, buildLiveDoc, liveStatusFromSofascore } from '../api/live.js';
-import { liveSnapshotHash, isDuplicateWriteError } from './liveScraper.js';
+import {
+  liveSnapshotHash,
+  isDuplicateWriteError,
+  shouldRefreshLineups,
+  isCacheableLineups
+} from './liveScraper.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const INTERVAL_MS = 30_000;
@@ -72,14 +77,40 @@ async function tick() {
       const cachedFantasy = fantasyCache.get(m.id);
       const fantasyFresh = !!cachedFantasy && now - cachedFantasy.at < FANTASY_TTL_MS;
 
-      // 1) datos Sofascore: event+incidents siempre; lineups una vez; fantasy cada 60s
+      // 1) datos Sofascore: event+incidents siempre; lineups cacheado; fantasy cada 60s
       const raw = await fetchMatchData(m.id, {
-        lineupsData: cachedLineups,
+        lineupsData: cachedLineups?.data,
         fantasyData: fantasyFresh ? cachedFantasy.data : undefined
       });
-      if (raw.lineupsData) lineupsCache.set(m.id, raw.lineupsData);
       if (!fantasyFresh && raw.fantasyData) {
         fantasyCache.set(m.id, { data: raw.fantasyData, at: Date.now() });
+      }
+
+      const statusKey = `${raw.eventData.event?.status?.type ?? ''}|${raw.eventData.event?.lastPeriod ?? ''}`;
+      const subCount = (raw.incidentsData?.incidents || [])
+        .filter(i => i.incidentType === 'substitution').length;
+
+      if (cachedLineups?.data) {
+        const refresh = shouldRefreshLineups({
+          cachedAt: cachedLineups.at,
+          statusKey,
+          cachedStatusKey: cachedLineups.statusKey,
+          hasSubstitution: subCount > (cachedLineups.subCount || 0),
+          nowMs: now
+        });
+        if (refresh) {
+          try {
+            const freshLineups = await fetchLineups(m.id);
+            if (isCacheableLineups(freshLineups)) {
+              raw.lineupsData = freshLineups;
+              lineupsCache.set(m.id, { data: freshLineups, at: Date.now(), statusKey, subCount });
+            }
+          } catch (e) {
+            console.error(`${stamp()} Fallo lineups ${m.id}: ${e.message}`);
+          }
+        }
+      } else if (isCacheableLineups(raw.lineupsData)) {
+        lineupsCache.set(m.id, { data: raw.lineupsData, at: now, statusKey, subCount });
       }
 
       // 2) observación y eventos ANTES de snapshot/hash
