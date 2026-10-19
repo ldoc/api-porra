@@ -157,6 +157,7 @@ function setCorsHeaders(req, res) {
   mergeVary(res, 'Origin, Accept-Encoding');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Client-Phase');
+  res.setHeader('Access-Control-Expose-Headers', 'X-Server-Time, ETag');
 }
 
 function parseBody(req, maxSizeBytes = 1024 * 1024) {
@@ -1304,6 +1305,7 @@ const server = http.createServer(async (req, res) => {
     const phaseCheck = await checkPhaseConsistency(req, res);
     if (!phaseCheck) return;
     try {
+      const serverNow = new Date().toISOString();
       const eventIdRaw = reqUrl.searchParams.get('eventId');
       let eventId = null;
       if (eventIdRaw != null) {
@@ -1341,7 +1343,8 @@ const server = http.createServer(async (req, res) => {
       })) {
         res.writeHead(304, {
           ETag: liveBodyCache.etag,
-          'Cache-Control': 'public, max-age=28, stale-while-revalidate=56'
+          'Cache-Control': 'public, max-age=28, stale-while-revalidate=56',
+          'X-Server-Time': serverNow
         });
         res.end();
         return;
@@ -1356,6 +1359,7 @@ const server = http.createServer(async (req, res) => {
       const data = page.data;
       const json = JSON.stringify(data);
       liveBodyCache = { source: sourceKey, version, since: sinceKey, etag: computeWeakEtag(json) };
+      res.setHeader('X-Server-Time', serverNow);
       sendJson(req, res, 200, data, 28);
     } catch (e) {
       console.error('Error obteniendo eventos live:', e);
