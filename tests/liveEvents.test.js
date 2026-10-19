@@ -350,3 +350,21 @@ test('findGoalToCancel devuelve null si falta teamId o time', () => {
   const cancel = deriveEvents(o, [goal], NOW).find(e => e.type === 'goal_cancelled');
   assert.equal(cancel.payload.ofSourceId, null);
 });
+
+test('findGoalToCancel no anula el gol de otro equipo', () => {
+  const awayGoal = { sourceId: 'goal|a', type: 'goal', teamId: 2, minute: 30, payload: { isHome: false } };
+  const o = obs({ score: { home: 0, away: 0 }, incidents: [
+    { sourceId: 'v', type: 'goal_cancelled', class: 'goalDisallowed', time: 31, teamId: 1 }
+  ] });
+  const cancel = deriveEvents(o, [awayGoal], NOW).find(e => e.type === 'goal_cancelled');
+  assert.equal(cancel.payload.ofSourceId, null);
+});
+
+test('findGoalToCancel resuelve gol y anulacion del mismo tick', () => {
+  const o = obs({ score: { home: 0, away: 0 }, incidents: [
+    { sourceId: 'g', type: 'goal', class: 'regular', time: 40, isHome: true, playerId: 11, homeScore: 1, awayScore: 0, teamId: 1 },
+    { sourceId: 'v', type: 'goal_cancelled', class: 'goalDisallowed', time: 41, teamId: 1, playerId: 11 }
+  ] });
+  const cancel = deriveEvents(o, [], NOW).find(e => e.type === 'goal_cancelled');
+  assert.equal(cancel.payload.ofSourceId, 'goal|g');
+});

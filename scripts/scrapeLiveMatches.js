@@ -43,7 +43,8 @@ async function tick() {
       if (!status) continue;
       obs.status = status;
       obs.kickoffMs = m.fecha * 1000; // ancla temporal al inicio programado
-      const existing = await LiveEvent.find({ eventId: m.id }, 'sourceId type payload').sort({ ts: 1, _id: 1 }).lean();
+      const existing = await LiveEvent.find({ eventId: m.id, source: { $ne: 'sim' } },
+        'sourceId type payload teamId minute seq ts').sort({ ts: 1, seq: 1, _id: 1 }).lean();
       const nuevos = deriveEvents(obs, existing, Date.now());
       if (nuevos.length) {
         try {
