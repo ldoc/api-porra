@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { deriveEvents, foldScore, expireAtEndOfDayUTC, EVENT_TYPES } from '../api/liveEvents.js';
+import { deriveEvents, foldScore, expireAtEndOfDayUTC, EVENT_TYPES, LIVE_EXISTING_PROJECTION } from '../api/liveEvents.js';
 
 const NOW = Date.parse('2026-09-16T20:00:00Z');
 
@@ -357,6 +357,7 @@ test('findGoalToCancel no anula el gol de otro equipo', () => {
     { sourceId: 'v', type: 'goal_cancelled', class: 'goalDisallowed', time: 31, teamId: 1 }
   ] });
   const cancel = deriveEvents(o, [awayGoal], NOW).find(e => e.type === 'goal_cancelled');
+  assert.ok(cancel);
   assert.equal(cancel.payload.ofSourceId, null);
 });
 
@@ -366,5 +367,28 @@ test('findGoalToCancel resuelve gol y anulacion del mismo tick', () => {
     { sourceId: 'v', type: 'goal_cancelled', class: 'goalDisallowed', time: 41, teamId: 1, playerId: 11 }
   ] });
   const cancel = deriveEvents(o, [], NOW).find(e => e.type === 'goal_cancelled');
+  assert.ok(cancel);
   assert.equal(cancel.payload.ofSourceId, 'goal|g');
+});
+
+test('findGoalToCancel respeta el limite de 5 minutos', () => {
+  const o = obs({ score: { home: 0, away: 0 }, incidents: [
+    { sourceId: 'v', type: 'goal_cancelled', class: 'goalDisallowed', time: 40, teamId: 1, playerId: 11 }
+  ] });
+  const far = { sourceId: 'goal|far', type: 'goal', teamId: 1, minute: 34, payload: { isHome: true } };
+  const cFar = deriveEvents(o, [far], NOW).find(e => e.type === 'goal_cancelled');
+  assert.ok(cFar);
+  assert.equal(cFar.payload.ofSourceId, null);
+
+  const edge = { sourceId: 'goal|edge', type: 'goal', teamId: 1, minute: 35, payload: { isHome: true } };
+  const cEdge = deriveEvents(o, [edge], NOW).find(e => e.type === 'goal_cancelled');
+  assert.ok(cEdge);
+  assert.equal(cEdge.payload.ofSourceId, 'goal|edge');
+});
+
+test('LIVE_EXISTING_PROJECTION incluye los campos que usa deriveEvents', () => {
+  const fields = LIVE_EXISTING_PROJECTION.split(' ');
+  for (const f of ['playerId', 'teamId', 'minute', 'seq', 'ts']) {
+    assert.ok(fields.includes(f), `falta ${f}`);
+  }
 });

@@ -3,6 +3,8 @@ export const EVENT_TYPES = [
   'penalty_missed', 'card', 'substitution', 'rating', 'score', 'match_final'
 ];
 
+export const LIVE_EXISTING_PROJECTION = 'sourceId type payload teamId playerId minute seq ts';
+
 export function expireAtEndOfDayUTC(nowMs) {
   const d = new Date(nowMs);
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 23, 59, 59, 0));

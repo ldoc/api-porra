@@ -4,7 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { connectDB, LiveMatch, LiveEvent } from '../db/index.js';
 import { scrapMatchSource, scrapMatchFull, fetchMatchData } from './matchStats.js';
-import { deriveEvents } from '../api/liveEvents.js';
+import { deriveEvents, LIVE_EXISTING_PROJECTION } from '../api/liveEvents.js';
 import { selectLiveMatches, buildLiveDoc, liveStatusFromSofascore } from '../api/live.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -44,7 +44,7 @@ async function tick() {
       obs.status = status;
       obs.kickoffMs = m.fecha * 1000; // ancla temporal al inicio programado
       const existing = await LiveEvent.find({ eventId: m.id, source: { $ne: 'sim' } },
-        'sourceId type payload teamId minute seq ts').sort({ ts: 1, seq: 1, _id: 1 }).lean();
+        LIVE_EXISTING_PROJECTION).sort({ ts: 1, seq: 1, _id: 1 }).lean();
       const nuevos = deriveEvents(obs, existing, Date.now());
       if (nuevos.length) {
         try {
