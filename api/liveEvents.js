@@ -8,10 +8,29 @@ export function expireAtEndOfDayUTC(nowMs) {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 23, 59, 59, 0));
 }
 
+const TYPE_RANK = {
+  status: 1, lineup: 2, goal: 3, own_goal: 3, goal_cancelled: 4,
+  penalty_saved: 5, penalty_missed: 5, card: 6, substitution: 7,
+  assist: 8, rating: 9, score: 10, match_final: 11
+};
+
+function tsOfMinute(kickoffMs, minute, addedTime, fallbackMs) {
+  if (kickoffMs == null) return new Date(fallbackMs);
+  const m = (minute || 0) + (addedTime || 0) + ((minute || 0) > 45 ? 15 : 0);
+  return new Date(kickoffMs + m * 60000);
+}
+
 export function foldScore(events) {
-  const byId = new Map(events.map(e => [e.sourceId, e]));
+  const sorted = [...events].sort((a, b) => {
+    const t = new Date(a.ts).getTime() - new Date(b.ts).getTime();
+    if (t) return t;
+    const s = (a.seq || 0) - (b.seq || 0);
+    if (s) return s;
+    return (TYPE_RANK[a.type] || 0) - (TYPE_RANK[b.type] || 0);
+  });
+  const byId = new Map(sorted.map(e => [e.sourceId, e]));
   let home = 0, away = 0;
-  for (const e of events) {
+  for (const e of sorted) {
     if (e.type === 'goal') {
       if (e.payload?.isHome) home++; else away++;
     } else if (e.type === 'score') {
@@ -25,50 +44,33 @@ export function foldScore(events) {
   return { home: Math.max(0, home), away: Math.max(0, away) };
 }
 
+let _rev = 0;
+function rev() { _rev += 1; return `${Date.now().toString(36)}-${_rev.toString(36)}`; }
+
+function latestByPlayer(events, type) {
+  const map = new Map();
+  for (const e of events) if (e.type === type) map.set(String(e.playerId), e);
+  return map;
+}
+
 export function deriveEvents(obs, existing = [], nowMs = Date.now()) {
   const have = new Set(existing.map(e => e.sourceId));
   const out = [];
-  const expireAt = expireAtEndOfDayUTC(nowMs);
-  const evTs = (minute) => obs.kickoffMs != null
-    ? new Date(obs.kickoffMs + (minute || 0) * 60000 + ((minute || 0) > 45 ? 15 * 60000 : 0))
-    : new Date(nowMs);
+  const expireAt = expireAtEndOfDayUTC(obs.kickoffMs != null ? obs.kickoffMs : nowMs);
+  const source = obs.source || 'scraper';
+  let seq = 0;
   const push = (ev) => {
     if (have.has(ev.sourceId)) return;
     have.add(ev.sourceId);
     out.push({
-      eventId: obs.eventId, ingestedAt: new Date(nowMs), ts: ev.ts ?? evTs(ev.minute), second: 0,
-      minute: ev.minute ?? null, type: ev.type,
+      eventId: obs.eventId, ingestedAt: new Date(nowMs),
+      ts: ev.ts ?? tsOfMinute(obs.kickoffMs, ev.minute, ev.addedTime, nowMs),
+      second: 0, minute: ev.minute ?? null, type: ev.type,
       teamId: ev.teamId ?? null, playerId: ev.playerId ?? null,
-      sourceId: ev.sourceId, payload: ev.payload ?? {}, expireAt
+      sourceId: ev.sourceId, seq: seq++, source,
+      payload: ev.payload ?? {}, expireAt
     });
   };
-
-  if (Array.isArray(obs.starters) && obs.starters.length) {
-    push({ sourceId: 'lineup|' + [...obs.starters].sort((a, b) => a - b).join(','), type: 'lineup', minute: 0, payload: { starters: obs.starters } });
-  }
-
-  for (const inc of obs.incidents || []) {
-    if (inc.type === 'goal') {
-      push({ sourceId: 'goal|' + inc.sourceId, type: 'goal', teamId: inc.teamId, playerId: inc.playerId, minute: inc.time ?? null,
-        payload: { scorerId: inc.playerId, isPenalty: inc.class === 'penalty', isOwnGoal: inc.class === 'ownGoal', isHome: !!inc.isHome, scoreHome: inc.homeScore ?? null, scoreAway: inc.awayScore ?? null } });
-    } else if (inc.type === 'penalty_saved') {
-      push({ sourceId: 'psave|' + inc.sourceId, type: 'penalty_saved', teamId: inc.teamId, playerId: inc.keeperId, minute: inc.time ?? null,
-        payload: { keeperId: inc.keeperId ?? null, takerId: inc.takerId ?? null } });
-    } else if (inc.type === 'penalty_missed') {
-      push({ sourceId: 'pmiss|' + inc.sourceId, type: 'penalty_missed', teamId: inc.teamId, playerId: inc.takerId, minute: inc.time ?? null,
-        payload: { takerId: inc.takerId ?? null } });
-    } else if (inc.type === 'card') {
-      push({ sourceId: 'card|' + inc.sourceId, type: 'card', teamId: inc.teamId, playerId: inc.playerId, minute: inc.time ?? null,
-        payload: { cardType: inc.cardType ?? inc.class ?? 'yellow' } });
-    } else if (inc.type === 'substitution') {
-      push({ sourceId: 'sub|' + inc.sourceId, type: 'substitution', teamId: inc.teamId, minute: inc.time ?? null,
-        payload: { inId: inc.inId ?? null, outId: inc.outId ?? null } });
-    } else if (inc.type === 'goal_cancelled') {
-      const ofSourceId = findGoalToCancel(inc, existing, out);
-      push({ sourceId: 'cancel|' + inc.sourceId, type: 'goal_cancelled', teamId: inc.teamId, playerId: inc.playerId, minute: inc.time ?? null,
-        payload: { ofSourceId } });
-    }
-  }
 
   if (obs.status) {
     const p2 = obs.period && obs.period !== 'period1';
@@ -78,21 +80,61 @@ export function deriveEvents(obs, existing = [], nowMs = Date.now()) {
       : (obs.minute ?? 90);
     const breakMin = (obs.status === 'LIVE' && p2) || obs.status === 'FT' ? 15 : 0;
     const sts = obs.kickoffMs != null ? new Date(obs.kickoffMs + (sm + breakMin) * 60000) : undefined;
-    push({ sourceId: 'status|' + obs.status + '|' + (obs.period ?? ''), type: 'status', minute: sm, ts: sts, payload: { status: obs.status, period: obs.period ?? null } });
+    push({ sourceId: 'status|' + obs.status + '|' + (obs.period ?? ''), type: 'status', minute: sm, ts: sts,
+      payload: { status: obs.status, period: obs.period ?? null,
+        kickoffTs: obs.kickoffMs != null ? new Date(obs.kickoffMs).toISOString() : null } });
   }
 
+  if (Array.isArray(obs.starters) && obs.starters.length) {
+    push({ sourceId: 'lineup|' + [...obs.starters].sort((a, b) => a - b).join(','), type: 'lineup', minute: 0,
+      payload: { starters: obs.starters } });
+  }
+
+  const incidents = [...(obs.incidents || [])].sort((a, b) => {
+    const d = (a.time ?? 0) - (b.time ?? 0);
+    return d || ((TYPE_RANK[a.type] ?? 99) - (TYPE_RANK[b.type] ?? 99));
+  });
+  for (const inc of incidents) {
+    if (inc.type === 'goal') {
+      push({ sourceId: 'goal|' + inc.sourceId, type: 'goal', teamId: inc.teamId, playerId: inc.playerId, minute: inc.time ?? null, addedTime: inc.addedTime ?? null,
+        payload: { scorerId: inc.playerId, isPenalty: inc.class === 'penalty', isOwnGoal: inc.class === 'ownGoal', isHome: !!inc.isHome, scoreHome: inc.homeScore ?? null, scoreAway: inc.awayScore ?? null } });
+    } else if (inc.type === 'penalty_saved') {
+      push({ sourceId: 'psave|' + inc.sourceId, type: 'penalty_saved', teamId: inc.teamId, playerId: inc.keeperId, minute: inc.time ?? null, addedTime: inc.addedTime ?? null,
+        payload: { keeperId: inc.keeperId ?? null, takerId: inc.takerId ?? null } });
+    } else if (inc.type === 'penalty_missed') {
+      push({ sourceId: 'pmiss|' + inc.sourceId, type: 'penalty_missed', teamId: inc.teamId, playerId: inc.takerId, minute: inc.time ?? null, addedTime: inc.addedTime ?? null,
+        payload: { takerId: inc.takerId ?? null } });
+    } else if (inc.type === 'card') {
+      push({ sourceId: 'card|' + inc.sourceId, type: 'card', teamId: inc.teamId, playerId: inc.playerId, minute: inc.time ?? null, addedTime: inc.addedTime ?? null,
+        payload: { cardType: inc.cardType ?? inc.class ?? 'yellow' } });
+    } else if (inc.type === 'substitution') {
+      push({ sourceId: 'sub|' + inc.sourceId, type: 'substitution', teamId: inc.teamId, minute: inc.time ?? null, addedTime: inc.addedTime ?? null,
+        payload: { inId: inc.inId ?? null, outId: inc.outId ?? null } });
+    } else if (inc.type === 'goal_cancelled') {
+      push({ sourceId: 'cancel|' + inc.sourceId, type: 'goal_cancelled', teamId: inc.teamId, playerId: inc.playerId, minute: inc.time ?? null, addedTime: inc.addedTime ?? null,
+        payload: { ofSourceId: findGoalToCancel(inc, existing, out) } });
+    }
+  }
+
+  const prevRatings = latestByPlayer(existing, 'rating');
   for (const [pid, rating] of Object.entries(obs.ratings || {})) {
-    push({ sourceId: `rating|${pid}|${rating}`, type: 'rating', playerId: Number(pid), minute: obs.minute ?? null, payload: { rating } });
+    const prev = prevRatings.get(String(pid));
+    if (prev && Number(prev.payload?.rating) === Number(rating)) continue;
+    push({ sourceId: `rating|${pid}|${rating}|${rev()}`, type: 'rating', playerId: Number(pid), minute: obs.minute ?? null, payload: { rating } });
   }
 
+  const prevAssists = latestByPlayer(existing, 'assist');
   for (const [pid, count] of Object.entries(obs.assists || {})) {
-    if (!count) continue; // evitar flood de contadores 0
-    push({ sourceId: `assist|${pid}|${count}`, type: 'assist', playerId: Number(pid), minute: obs.minute ?? null, payload: { asistencias: count } });
+    const prev = prevAssists.get(String(pid));
+    const prevCount = prev ? (prev.payload?.asistencias ?? 0) : 0;
+    if (Number(count) === prevCount) continue;
+    push({ sourceId: `assist|${pid}|${count}|${rev()}`, type: 'assist', playerId: Number(pid), minute: obs.minute ?? null, payload: { asistencias: Number(count) } });
   }
 
-  const folded = foldScore([...existing, ...out]);
+  const folded = foldScore(existing);
   if (obs.score && (folded.home !== obs.score.home || folded.away !== obs.score.away)) {
-    push({ sourceId: `score|${obs.score.home}-${obs.score.away}`, type: 'score', minute: obs.minute ?? null, payload: { scoreHome: obs.score.home, scoreAway: obs.score.away } });
+    push({ sourceId: `score|${obs.score.home}-${obs.score.away}|${rev()}`, type: 'score', minute: obs.minute ?? null,
+      payload: { scoreHome: obs.score.home, scoreAway: obs.score.away } });
   }
 
   if (obs.status === 'FT') {
@@ -107,8 +149,12 @@ function findGoalToCancel(inc, existing, out) {
   const all = [...existing, ...out];
   const cancelled = new Set(all.filter(e => e.type === 'goal_cancelled').map(e => e.payload?.ofSourceId));
   const goals = all.filter(e => e.type === 'goal' && !cancelled.has(e.sourceId));
-  const mine = goals.filter(e => !inc.teamId || e.teamId === inc.teamId);
-  const pool = mine.length ? mine : goals;
-  const last = pool[pool.length - 1];
-  return last ? last.sourceId : null;
+  const mine = goals.filter(e => {
+    if (inc.teamId != null && e.teamId !== inc.teamId) return false;
+    if (inc.time != null && e.minute != null && Math.abs(e.minute - inc.time) > 5) return false;
+    return true;
+  });
+  if (!mine.length) return null;
+  mine.sort((a, b) => (new Date(a.ts).getTime() - new Date(b.ts).getTime()) || ((a.seq || 0) - (b.seq || 0)));
+  return mine[mine.length - 1].sourceId;
 }

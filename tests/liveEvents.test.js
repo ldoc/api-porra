@@ -210,3 +210,26 @@ test('deriveEvents emite match_final al terminar', () => {
   assert.ok(f);
   assert.deepEqual(f.payload, { scoreHome: 1, scoreAway: 0, ratings: { 11: 7.5 }, minutes: { 11: 90 } });
 });
+
+test('deriveEvents asigna seq creciente en orden canónico', () => {
+  const o = obs({ kickoffMs: Date.parse('2026-09-16T20:00:00Z'), status: 'LIVE',
+    starters: [11, 12], score: { home: 1, away: 0 },
+    incidents: [{ sourceId: 'g', type: 'goal', class: 'regular', time: 22, isHome: true, playerId: 11, homeScore: 1, awayScore: 0, teamId: 1 }] });
+  const evs = deriveEvents(o, [], NOW);
+  assert.deepEqual(evs.map(e => e.type), ['status', 'lineup', 'goal', 'score']);
+  assert.deepEqual(evs.map(e => e.seq), [0, 1, 2, 3]);
+});
+
+test('deriveEvents suma addedTime al ts', () => {
+  const kickoffMs = Date.parse('2026-09-16T20:00:00Z');
+  const o = obs({ kickoffMs, score: { home: 1, away: 0 }, incidents: [
+    { sourceId: 'g', type: 'goal', class: 'regular', time: 45, addedTime: 2, isHome: true, playerId: 11, homeScore: 1, awayScore: 0, teamId: 1 }
+  ] });
+  const g = deriveEvents(o, [], NOW).find(e => e.type === 'goal');
+  assert.equal(new Date(g.ts).toISOString(), '2026-09-16T20:47:00.000Z');
+});
+
+test('deriveEvents etiqueta source scraper por defecto y sim si se indica', () => {
+  assert.equal(deriveEvents(obs(), [], NOW)[0].source, 'scraper');
+  assert.equal(deriveEvents(obs({ source: 'sim' }), [], NOW)[0].source, 'sim');
+});
