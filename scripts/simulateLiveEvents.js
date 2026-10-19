@@ -28,6 +28,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import mongoose from 'mongoose';
 import { connectDB, User, LiveEvent, MatchStats } from '../db/index.js';
 import { expireAtEndOfDayUTC } from '../api/liveEvents.js';
 
@@ -47,7 +48,7 @@ function readDataJson(name) {
 function arg(name, def) {
   const i = process.argv.indexOf(`--${name}`);
   if (i < 0) return def;
-  if (['clean', 'dry', 'clean-only', 'force'].includes(name)) return true;
+  if (['clean', 'dry', 'clean-only', 'force', 'yes'].includes(name)) return true;
   return process.argv[i + 1] ?? def;
 }
 
@@ -93,6 +94,18 @@ async function main() {
   const allPlayers = readDataJson('jugadores.json');
   await connectDB();
 
+  const yes = !!arg('yes', false);
+  const allowProd = process.argv.includes('--allow-prod');
+  const forceMatchstats = process.argv.includes('--force-matchstats');
+  if (force) {
+    if (!yes) { console.error('--force requiere --yes'); process.exit(1); }
+    const dbName = mongoose.connection.name;
+    if (dbName !== 'test' && !allowProd) {
+      console.error(`--force bloqueado en la DB "${dbName}". Usa --allow-prod si es intencional.`);
+      process.exit(1);
+    }
+  }
+
   // Elegir partidos SIN matchstat (si ya lo tienen, el front los excluye del live por diseño).
   const have = new Set((await MatchStats.find({}, { eventId: 1 }).lean()).map(d => d.eventId));
   const explicit = arg('events', null) || arg('event', null);
@@ -108,12 +121,12 @@ async function main() {
   }
   const clash = ids.filter(id => have.has(id));
   if (clash.length) {
-    if (force) {
+    if (force && forceMatchstats) {
       await MatchStats.deleteMany({ eventId: { $in: clash } });
       console.log(`--force: borrados matchstats de ${clash.join(', ')} (el front los tratará como live).`);
     } else {
       console.warn(`AVISO: ya están en matchstats y el front los excluirá del live: ${clash.join(', ')}.`);
-      console.warn('Usa --force para borrar sus matchstats, o --auto para elegir otros partidos.');
+      console.warn('Usa --force --force-matchstats para borrar sus matchstats, o --auto para elegir otros partidos.');
     }
   }
 
@@ -156,7 +169,7 @@ async function main() {
   const other = (squad, notId) => squad.find(p => p.id !== notId) || squad[0];
 
   const bulk = [];
-  const insert = (M, ev) => bulk.push({ ...ev, eventId: M.id, expireAt, ingestedAt: new Date() });
+  const insert = (M, ev) => bulk.push({ ...ev, eventId: M.id, expireAt, ingestedAt: new Date(), source: 'sim' });
   async function flush() {
     if (!bulk.length) return 0;
     const batch = bulk.splice(0, bulk.length);

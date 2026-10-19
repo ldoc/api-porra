@@ -23,7 +23,7 @@ async function tick() {
   const ids = live.map(m => m.id);
   const [snapshots, finalEvents] = await Promise.all([
     LiveMatch.find({ eventId: { $in: ids } }, 'eventId status').lean(),
-    LiveEvent.find({ eventId: { $in: ids }, sourceId: 'final' }, 'eventId').lean()
+    LiveEvent.find({ eventId: { $in: ids }, sourceId: 'final', source: { $ne: 'sim' } }, 'eventId').lean()
   ]);
   const finals = new Set(finalEvents.map(d => d.eventId));
   const finished = new Set(
