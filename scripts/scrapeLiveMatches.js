@@ -4,14 +4,13 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { connectDB, LiveMatch, LiveEvent } from '../db/index.js';
 import GameConfig from '../db/models/GameConfig.js';
-import { scrapMatchSource, scrapMatchFull, fetchMatchData, fetchLineups } from './matchStats.js';
+import { scrapMatchSource, scrapMatchFull, fetchMatchData } from './matchStats.js';
 import { deriveEvents, LIVE_EXISTING_PROJECTION } from '../api/liveEvents.js';
 import { selectLiveMatches, buildLiveDoc, liveStatusFromSofascore, buildScrapeLog } from '../api/live.js';
 import {
   liveSnapshotHash,
   isDuplicateWriteError,
-  shouldRefreshLineups,
-  isCacheableLineups
+  criticalFetchFailures
 } from './liveScraper.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -25,7 +24,8 @@ const loadCalendar = () => JSON.parse(fs.readFileSync(calendarPath, 'utf-8'));
 let calendar = loadCalendar();
 let calendarLoadedAt = Date.now();
 const lastSnapshotHash = new Map();
-const lineupsCache = new Map();
+// Only the fantasy feed is cached. Lineups carry the live ratings/minutes and
+// are fetched fresh every tick so a rating change is visible immediately.
 const fantasyCache = new Map();
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const stamp = () => new Date().toISOString();
@@ -58,7 +58,7 @@ async function recordScrape({ startedMs, live, ok = 0, inserted = 0, healthy = t
 
 async function tick() {
   const startedMs = Date.now();
-  const stats = { live: 0, ok: 0, inserted: 0, attempted: 0, failed: 0, fatal: false };
+  const stats = { live: 0, ok: 0, inserted: 0, attempted: 0, failed: 0, criticalFailed: 0, fatal: false };
   try {
     refreshCalendarIfNeeded(Date.now());
     const live = selectLiveMatches(calendar, Date.now());
@@ -72,7 +72,7 @@ async function tick() {
       LiveEvent.find(
         { eventId: { $in: ids }, source: { $ne: 'sim' } },
         `eventId ${LIVE_EXISTING_PROJECTION}`
-      ).sort({ ts: 1, seq: 1 }).lean()
+      ).sort({ ts: 1, seq: 1, ingestedAt: 1, _id: 1 }).lean()
     ]);
     const finals = new Set(finalEvents.map(d => d.eventId));
     const finished = new Set(
@@ -93,44 +93,29 @@ async function tick() {
       stats.attempted++;
       try {
         const now = Date.now();
-        const cachedLineups = lineupsCache.get(m.id);
         const cachedFantasy = fantasyCache.get(m.id);
         const fantasyFresh = !!cachedFantasy && now - cachedFantasy.at < FANTASY_TTL_MS;
 
-        // 1) datos Sofascore: event+incidents siempre; lineups cacheado; fantasy cada 60s
+        // 1) datos Sofascore: event+incidents+lineups siempre (lineups es la
+        // fuente de ratings/minutos); fantasy cada 60s.
         const raw = await fetchMatchData(m.id, {
-          lineupsData: cachedLineups?.data,
           fantasyData: fantasyFresh ? cachedFantasy.data : undefined
         });
         if (!fantasyFresh && raw.fantasyData) {
           fantasyCache.set(m.id, { data: raw.fantasyData, at: Date.now() });
         }
 
-        const statusKey = `${raw.eventData.event?.status?.type ?? ''}|${raw.eventData.event?.lastPeriod ?? ''}`;
-        const subCount = (raw.incidentsData?.incidents || [])
-          .filter(i => i.incidentType === 'substitution').length;
-
-        if (cachedLineups?.data) {
-          const refresh = shouldRefreshLineups({
-            cachedAt: cachedLineups.at,
-            statusKey,
-            cachedStatusKey: cachedLineups.statusKey,
-            hasSubstitution: subCount > (cachedLineups.subCount || 0),
-            nowMs: now
-          });
-          if (refresh) {
-            try {
-              const freshLineups = await fetchLineups(m.id);
-              if (isCacheableLineups(freshLineups)) {
-                raw.lineupsData = freshLineups;
-                lineupsCache.set(m.id, { data: freshLineups, at: Date.now(), statusKey, subCount });
-              }
-            } catch (e) {
-              console.error(`${stamp()} Fallo lineups ${m.id}: ${e.message}`);
-            }
+        const failures = criticalFetchFailures(raw);
+        if (failures.length) {
+          stats.failed++;
+          stats.criticalFailed++;
+          for (const failure of failures) {
+            console.error(JSON.stringify({
+              t: stamp(), eventId: m.id, endpoint: failure.endpoint, error: failure.message
+            }));
           }
-        } else if (isCacheableLineups(raw.lineupsData)) {
-          lineupsCache.set(m.id, { data: raw.lineupsData, at: now, statusKey, subCount });
+          // No hash/snapshot advancement: next tick retries the failed data.
+          continue;
         }
 
         // 2) observación y eventos ANTES de snapshot/hash
@@ -189,7 +174,8 @@ async function tick() {
     stats.fatal = true;
     throw e;
   } finally {
-    const healthy = !stats.fatal && !(stats.attempted > 0 && stats.failed >= stats.attempted);
+    const healthy = !stats.fatal && stats.criticalFailed === 0
+      && !(stats.attempted > 0 && stats.failed >= stats.attempted);
     await recordScrape({ startedMs, ...stats, healthy });
   }
 }

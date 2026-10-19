@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import {
   liveSnapshotHash,
   isDuplicateWriteError,
-  shouldRefreshLineups,
-  isCacheableLineups
+  criticalFetchFailures,
+  hasCriticalFetchFailure
 } from '../scripts/liveScraper.js';
 
 function baseObs() {
@@ -90,66 +90,20 @@ test('isDuplicateWriteError: códigos reales y casos límite', () => {
   assert.equal(isDuplicateWriteError({ writeErrors: [] }), false);
 });
 
-test('shouldRefreshLineups: frescos, mismo estado y sin sustitución → false', () => {
-  assert.equal(shouldRefreshLineups({
-    cachedAt: 1000,
-    statusKey: 'inprogress|period1',
-    cachedStatusKey: 'inprogress|period1',
-    hasSubstitution: false,
-    nowMs: 1000 + 299999
-  }), false);
+test('criticalFetchFailures detecta incidents/fantasy y ignora otros endpoints', () => {
+  const raw = { failures: [
+    { endpoint: 'incidents', message: 'HTTP 500' },
+    { endpoint: 'lineups', message: 'TIMEOUT' }
+  ] };
+  assert.deepEqual(criticalFetchFailures(raw), [{ endpoint: 'incidents', message: 'HTTP 500' }]);
+  assert.equal(hasCriticalFetchFailure(raw), true);
+  assert.equal(hasCriticalFetchFailure({ failures: [{ endpoint: 'lineups', message: 'x' }] }), false);
+  assert.equal(hasCriticalFetchFailure(null), false);
 });
 
-test('shouldRefreshLineups: supera el TTL → true', () => {
-  assert.equal(shouldRefreshLineups({
-    cachedAt: 1000,
-    statusKey: 'inprogress|period1',
-    cachedStatusKey: 'inprogress|period1',
-    hasSubstitution: false,
-    nowMs: 1000 + 300000
-  }), true);
-});
-
-test('shouldRefreshLineups: cambia el estado/periodo → true', () => {
-  assert.equal(shouldRefreshLineups({
-    cachedAt: 1000,
-    statusKey: 'halftime|period1',
-    cachedStatusKey: 'inprogress|period1',
-    hasSubstitution: false,
-    nowMs: 1001
-  }), true);
-});
-
-test('shouldRefreshLineups: hay sustitución nueva → true', () => {
-  assert.equal(shouldRefreshLineups({
-    cachedAt: 1000,
-    statusKey: 'inprogress|period2',
-    cachedStatusKey: 'inprogress|period2',
-    hasSubstitution: true,
-    nowMs: 1001
-  }), true);
-});
-
-test('shouldRefreshLineups: sin caché → true', () => {
-  assert.equal(shouldRefreshLineups({
-    cachedAt: null,
-    statusKey: 'inprogress|period1',
-    cachedStatusKey: undefined,
-    hasSubstitution: false,
-    nowMs: 1
-  }), true);
-});
-
-test('isCacheableLineups: no cachea payload vacío o parcial', () => {
-  assert.equal(isCacheableLineups(null), false);
-  assert.equal(isCacheableLineups({}), false);
-  assert.equal(isCacheableLineups({ home: { players: [] }, away: { players: [{ player: { id: 1 } }] } }), false);
-  assert.equal(isCacheableLineups({ home: { players: [{ player: { id: 1 } }] }, away: { players: [] } }), false);
-});
-
-test('isCacheableLineups: cachea cuando ambos lados tienen jugadores', () => {
-  assert.equal(isCacheableLineups({
-    home: { players: [{ player: { id: 1 } }] },
-    away: { players: [{ player: { id: 2 } }] }
-  }), true);
+test('criticalFetchFailures no avanza el hash si incidents falla y reintenta al recuperarse', () => {
+  const failed = { failures: [{ endpoint: 'incidents', message: 'HTTP 503' }] };
+  assert.equal(hasCriticalFetchFailure(failed), true);
+  const retried = { failures: [] };
+  assert.equal(hasCriticalFetchFailure(retried), false);
 });

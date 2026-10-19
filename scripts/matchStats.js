@@ -22,27 +22,79 @@ function processPlayer(playerEntry, teamId, assistsMap) {
 }
 
 const gkPenaltyCache = new Map();
+const gkPenaltySeen = new Map();
 
-function incidentsHasPenalty(incidentsData) {
-    return (incidentsData?.incidents || []).some(i =>
-        i.incidentType === 'inGamePenalty' ||
-        i.incidentType === 'penalty' ||
-        i.incidentClass === 'penalty'
-    );
+export function penaltyIncidentIds(incidentsData) {
+    const ids = new Set();
+    for (const incident of incidentsData?.incidents || []) {
+        const isPenalty = incident.incidentType === 'inGamePenalty' ||
+            incident.incidentType === 'penalty' ||
+            incident.incidentClass === 'penalty';
+        if (isPenalty && incident.id != null) ids.add(String(incident.id));
+    }
+    return ids;
 }
 
 async function fetchPlayerStatistics(eventId, playerId) {
     const statsUrl = `https://www.sofascore.com/api/v1/event/${eventId}/player/${playerId}/statistics`;
     try {
         const data = await fetchSofascore(statsUrl);
-        return data?.statistics?.penaltySave || 0;
+        return { ok: true, value: data?.statistics?.penaltySave || 0 };
     } catch (error) {
         if (error.message === 'NOT_FOUND') {
-            return 0;
+            return { ok: true, value: 0 };
         }
-        console.error(`Error obteniendo stats del jugador ${playerId}:`, error.message);
-        return 0;
+        console.error(JSON.stringify({
+            t: new Date().toISOString(), endpoint: 'player-statistics', eventId, playerId,
+            error: error.message
+        }));
+        return { ok: false };
     }
+}
+
+/**
+ * Resolves the GK penalty-save counter. A fetch is retried only when the
+ * player has no cached value or a new penalty incident id appeared. Failed
+ * fetches keep the last known value and do not mark the incident as seen, so
+ * the next tick retries it.
+ */
+export async function resolveGkPenalties({
+    eventId,
+    goalkeepers,
+    incidentsData,
+    cache = gkPenaltyCache,
+    seen = gkPenaltySeen,
+    fetchStats = fetchPlayerStatistics
+}) {
+    const currentIds = penaltyIncidentIds(incidentsData);
+    const previousIds = seen.get(eventId) || new Set();
+    const hasNewPenalty = [...currentIds].some(id => !previousIds.has(id));
+    let allOk = true;
+
+    await Promise.all(goalkeepers.map(async (gk) => {
+        const key = `${eventId}:${gk.id}`;
+        const cachedEntry = cache.get(key);
+        const cachedValue = cachedEntry && typeof cachedEntry === 'object'
+            ? cachedEntry.value
+            : cachedEntry;
+
+        if (cachedValue !== undefined && !hasNewPenalty) {
+            gk.penaltiParado = cachedValue;
+            return;
+        }
+
+        const result = await fetchStats(eventId, gk.id);
+        if (result?.ok) {
+            cache.set(key, { value: result.value });
+            gk.penaltiParado = result.value;
+        } else {
+            allOk = false;
+            gk.penaltiParado = cachedValue ?? 0;
+        }
+    }));
+
+    if (allOk) seen.set(eventId, currentIds);
+    return { refreshed: hasNewPenalty, allOk };
 }
 
 function processIncidents(incidentsData) {
@@ -103,16 +155,31 @@ export async function fetchLineups(eventId) {
     return fetchSofascore(`https://www.sofascore.com/api/v1/event/${eventId}/lineups`);
 }
 
-export async function fetchMatchData(eventId, { lineupsData, fantasyData } = {}) {
+export async function fetchMatchData(eventId, { lineupsData, fantasyData, fetchers = {} } = {}) {
     const eventUrl = `https://www.sofascore.com/api/v1/event/${eventId}`;
     const incidentsUrl = `https://www.sofascore.com/api/v1/event/${eventId}/incidents`;
     const fantasyUrl = `https://www.sofascore.com/api/v1/fantasy/event/${eventId}`;
 
+    const fetchEvent = fetchers.fetchEvent || fetchSofascore;
+    const fetchIncidents = fetchers.fetchIncidents || fetchSofascore;
+    const fetchFantasy = fetchers.fetchFantasy || fetchSofascore;
+    const fetchLineupsFn = fetchers.fetchLineups || fetchLineups;
+    const failures = [];
+
+    const safeFetch = async (endpoint, fn) => {
+        try {
+            return await fn();
+        } catch (error) {
+            failures.push({ endpoint, message: error.message });
+            return null;
+        }
+    };
+
     const [eventData, incidentsData, fetchedFantasyData] = await Promise.all([
-        fetchSofascore(eventUrl),
-        fetchSofascore(incidentsUrl).catch(() => null),
+        fetchEvent(eventUrl),
+        safeFetch('incidents', () => fetchIncidents(incidentsUrl)),
         fantasyData === undefined
-            ? fetchSofascore(fantasyUrl).catch(() => null)
+            ? safeFetch('fantasy', () => fetchFantasy(fantasyUrl))
             : Promise.resolve(fantasyData)
     ]);
 
@@ -122,7 +189,7 @@ export async function fetchMatchData(eventId, { lineupsData, fantasyData } = {})
     if (fetchedLineupsData === undefined) {
         fetchedLineupsData = null;
         try {
-            fetchedLineupsData = await fetchLineups(eventId);
+            fetchedLineupsData = await fetchLineupsFn(eventId);
         } catch (e) {
             if (!notStarted) throw e;
         }
@@ -132,7 +199,8 @@ export async function fetchMatchData(eventId, { lineupsData, fantasyData } = {})
         eventData,
         incidentsData,
         fantasyData: fetchedFantasyData,
-        lineupsData: fetchedLineupsData
+        lineupsData: fetchedLineupsData,
+        failures
     };
 }
 
@@ -154,18 +222,7 @@ export async function scrapMatchFull(eventId, raw = null) {
     const allPlayers = [...homePlayers, ...awayPlayers];
 
     const goalkeepers = allPlayers.filter(p => p.posicion === 'G' && p.minutos > 0);
-    const refreshPenalties = incidentsHasPenalty(incidentsData);
-    const gkStatsPromises = goalkeepers.map(async (gk) => {
-        const key = `${eventId}:${gk.id}`;
-        if (gkPenaltyCache.has(key) && !refreshPenalties) {
-            gk.penaltiParado = gkPenaltyCache.get(key);
-        } else {
-            const penaltySave = await fetchPlayerStatistics(eventId, gk.id);
-            gkPenaltyCache.set(key, penaltySave);
-            gk.penaltiParado = penaltySave;
-        }
-    });
-    await Promise.all(gkStatsPromises);
+    await resolveGkPenalties({ eventId, goalkeepers, incidentsData });
 
     const { penaltiesScored, goalsByGoalkeeper } = processIncidents(incidentsData);
     const homeGoals = ev.homeScore?.display ?? 0;

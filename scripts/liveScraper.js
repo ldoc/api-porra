@@ -24,20 +24,12 @@ export function isDuplicateWriteError(e) {
   return e.code === 11000;
 }
 
-export function shouldRefreshLineups({
-  cachedAt,
-  statusKey,
-  cachedStatusKey,
-  hasSubstitution,
-  nowMs,
-  ttlMs = 300000
-}) {
-  if (cachedAt == null) return true;
-  if (hasSubstitution) return true;
-  if (statusKey !== cachedStatusKey) return true;
-  return nowMs - cachedAt >= ttlMs;
+const CRITICAL_ENDPOINTS = new Set(['incidents', 'fantasy']);
+
+export function criticalFetchFailures(raw) {
+  return (raw?.failures || []).filter(f => CRITICAL_ENDPOINTS.has(f.endpoint));
 }
 
-export function isCacheableLineups(data) {
-  return !!(data?.home?.players?.length && data?.away?.players?.length);
+export function hasCriticalFetchFailure(raw) {
+  return criticalFetchFailures(raw).length > 0;
 }
