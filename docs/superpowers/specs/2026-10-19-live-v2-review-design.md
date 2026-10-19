@@ -167,8 +167,9 @@ del mismo `ts`, como cinturón y tirantes.
 
 - **`findGoalToCancel`**: cargar `teamId` en la proyección de `existing`;
   procesar incidencias en orden ascendente (gol antes que su anulación); mismo
-  tick resuelto por `seq`; devolver `assistPlayerIds`; si el gol no está en el log,
-  emitir la anulación con los datos del incidente.
+  tick resuelto por `seq`; devolver `assistPlayerIds` para el payload del gol
+  (trazabilidad, no para revertir); si el gol no está en el log, emitir la
+  anulación con los datos del incidente.
 - **`assist` absoluto** (ver 1.5): emitir altas y bajas.
 - **`score` reconciliación** al final del tick.
 - **Cursor**: `serverTime = max(ingestedAt)` **de los docs devueltos**; eliminar
@@ -176,7 +177,8 @@ del mismo `ts`, como cinturón y tirantes.
 - **Respuesta**: añadir `resync` cuando el cliente deba hacer full (delta
   demasiado grande o cursor inválido).
 - **`source`**: `deriveEvents`/inserción etiquetan `scraper`; el simulador,
-  `sim`. El scraper real lee solo `{ source: 'scraper' }`.
+  `sim`. El scraper real lee `{ source: { $ne: 'sim' } }` (incluye docs antiguos
+  sin el campo).
 
 ### 2.3 Seguridad
 
@@ -195,7 +197,8 @@ del mismo `ts`, como cinturón y tirantes.
 
 - `source: 'sim'` en todos los eventos del simulador.
 - El scraper real nunca lee `sim`.
-- La API devuelve `scraper` por defecto; `?source=sim` solo fuera de producción.
+- La API devuelve todo salvo `sim` por defecto; `?source=sim` solo fuera de
+  producción.
 - `--force` exige `--yes`; se niega si la DB no es `test` salvo `--allow-prod`.
 - `--force` **no** borra `MatchStats` salvo `--force-matchstats` explícito.
 
@@ -273,7 +276,8 @@ del mismo `ts`, como cinturón y tirantes.
 
 - Logs estructurados; health `lastScrapeAt`; badge "datos obsoletos" si el tick
   no avanza.
-- TTL sobre `ts` (no sobre el día de ingesta).
+- TTL calculado sobre el **día del partido** (`ts`), no sobre el día de ingesta
+  (evita borrar a mitad de un partido que cruza medianoche).
 - Creación/verificación de índices al arrancar (o en CI).
 - Rate limit por IP real; CORS exacto; secretos por entorno.
 
