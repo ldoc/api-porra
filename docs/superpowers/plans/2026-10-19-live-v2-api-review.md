@@ -840,6 +840,10 @@ const docs = await LiveEvent.find(filter, '-_id -expireAt -ingestedAt')
   .sort({ ingestedAt: 1, seq: 1 }).limit(5000).lean();
 ```
 
+La respuesta omite `_id`; el front debe deduplicar por `eventId|sourceId`
+(ver plan SPA, Task 3). `ingestedAt` se usa para `serverTime` y se elimina del
+payload.
+
 `sendJson` ya añade `Cache-Control` (`public, max-age=28, stale-while-revalidate=56`) porque recibe `cacheSeconds`. Añadir `Vary: Accept-Encoding, Origin` en `setCorsHeaders`.
 
 - Añadir `expireAt: { $gt: new Date() }` al filtro para no devolver eventos ya caducados entre pasadas del TTL.
