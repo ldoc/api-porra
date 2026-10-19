@@ -46,8 +46,8 @@ async function currentLiveVersion(sourceFilter) {
   }
   const last = await LiveEvent.findOne(
     { ...sourceFilter, expireAt: { $gt: new Date() } },
-    { ingestedAt: 1 }
-  ).sort({ ingestedAt: -1 }).lean();
+    { ingestedAt: 1, _id: 1 }
+  ).sort({ ingestedAt: -1, _id: -1 }).lean();
   const version = last ? liveEventsVersion([last]) : null;
   liveVersionCache = { key, version, at: Date.now() };
   return version;

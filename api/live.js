@@ -81,8 +81,18 @@ export function compareLiveEvents(a, b) {
 
 export const LIVE_EVENTS_DELTA_LIMIT = 5000;
 
+function compareVersionDocs(a, b) {
+  const byIngested = timestampOf(a?.ingestedAt) - timestampOf(b?.ingestedAt);
+  if (byIngested) return byIngested;
+  return String(a?._id ?? '').localeCompare(String(b?._id ?? ''));
+}
+
+// Version must change for same-millisecond inserts too, hence the `_id`
+// tiebreaker (ObjectId is monotonic within a process/second).
 export function liveEventsVersion(docs) {
-  return new Date(maxIngestedAt(docs) || 0).toISOString();
+  if (!docs?.length) return new Date(0).toISOString();
+  const last = [...docs].sort(compareVersionDocs).at(-1);
+  return `${new Date(timestampOf(last.ingestedAt)).toISOString()}|${last._id ?? ''}`;
 }
 
 export function shouldReturn304({ cached, version, since, source = '', ifNoneMatch }) {

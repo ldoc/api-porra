@@ -217,11 +217,22 @@ test('GET /api/live/events: nuevo evento (serverTime cambia) => ETag distinto', 
 });
 
 test('la version del endpoint cambia cuando cambia ingestedAt maximo', () => {
-  assert.equal(liveEventsVersion([{ ingestedAt: new Date('2026-09-16T20:01:00Z') }]), '2026-09-16T20:01:00.000Z');
-  assert.notEqual(
-    liveEventsVersion([{ ingestedAt: new Date('2026-09-16T20:01:00Z') }]),
-    liveEventsVersion([{ ingestedAt: new Date('2026-09-16T20:02:00Z') }])
+  assert.equal(
+    liveEventsVersion([{ _id: 'a', ingestedAt: new Date('2026-09-16T20:01:00Z') }]),
+    '2026-09-16T20:01:00.000Z|a'
   );
+  assert.notEqual(
+    liveEventsVersion([{ _id: 'a', ingestedAt: new Date('2026-09-16T20:01:00Z') }]),
+    liveEventsVersion([{ _id: 'b', ingestedAt: new Date('2026-09-16T20:02:00Z') }])
+  );
+});
+
+test('la version cambia con el mismo ingestedAt si cambia el _id ganador', () => {
+  const at = new Date('2026-09-16T20:01:00Z');
+  const v1 = liveEventsVersion([{ _id: 'aaa', ingestedAt: at }]);
+  const v2 = liveEventsVersion([{ _id: 'bbb', ingestedAt: at }]);
+  assert.notEqual(v1, v2);
+  assert.equal(v2, '2026-09-16T20:01:00.000Z|bbb');
 });
 
 test('liveEventsVersion sin docs devuelve epoch', () => {
@@ -235,6 +246,7 @@ test('shouldReturn304 exige version, since, source y ETag coincidentes', () => {
   assert.equal(shouldReturn304(base), true);
   assert.equal(shouldReturn304({ ...base, ifNoneMatch: undefined }), false);
   assert.equal(shouldReturn304({ ...base, version: '2026-09-16T20:02:00.000Z' }), false);
+  assert.equal(shouldReturn304({ ...base, version: '2026-09-16T20:01:00.000Z|otro' }), false);
   assert.equal(shouldReturn304({ ...base, since: '2026-09-16T20:00:00.000Z' }), false);
   assert.equal(shouldReturn304({ ...base, source: 'sim' }), false);
   assert.equal(shouldReturn304({ ...base, cached: { ...cached, etag: null } }), false);
