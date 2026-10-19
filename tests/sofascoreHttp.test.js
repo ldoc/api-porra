@@ -136,7 +136,7 @@ test('agota los reintentos por defecto (2) y lanza el último HTTP', { timeout: 
   assert.deepEqual(esperas, [400, 700]);
 });
 
-test('aplica timeout y también lo reintenta', { timeout: 2000 }, async () => {
+test('aplica timeout y no reintenta errores no HTTP 429/5xx', { timeout: 2000 }, async () => {
   let llamadas = 0;
   const request = () => {
     llamadas++;
@@ -147,7 +147,24 @@ test('aplica timeout y también lo reintenta', { timeout: 2000 }, async () => {
     fetchSofascore(URL_OK, { request, timeoutMs: 10, retries: 1, sleep: async () => {} }),
     /TIMEOUT/
   );
-  assert.equal(llamadas, 2);
+  assert.equal(llamadas, 1);
+});
+
+test('no reintenta 400 ni otras respuestas no reintentables', { timeout: 2000 }, async () => {
+  let llamadas = 0;
+  const request = async () => {
+    llamadas++;
+    return { statusCode: 400, response: '' };
+  };
+
+  await assert.rejects(
+    fetchSofascore(URL_OK, {
+      request,
+      sleep: async () => { throw new Error('no debería esperar'); }
+    }),
+    /HTTP 400/
+  );
+  assert.equal(llamadas, 1);
 });
 
 test('requestWithTimeout resuelve si la respuesta llega antes del timeout', { timeout: 2000 }, async () => {

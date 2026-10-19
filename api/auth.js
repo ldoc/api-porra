@@ -147,13 +147,24 @@ export async function getAllPlayers(filter = {}) {
   }));
 }
 
+function isSingleEmoji(value) {
+  if (!value) return false;
+  if (typeof Intl?.Segmenter === 'function') {
+    const graphemes = [...new Intl.Segmenter('en', { granularity: 'grapheme' }).segment(value)];
+    if (graphemes.length !== 1) return false;
+  } else if ([...value].length > 2) {
+    return false;
+  }
+  return /\p{Extended_Pictographic}|\p{Regional_Indicator}/u.test(value);
+}
+
 export function isValidAvatar(value) {
   if (typeof value !== 'string') return false;
   const v = value.trim();
   if (!v || v.length > 200) return false;
   if (/[<>&"'`]/.test(v)) return false;
-  if (/^https:\/\/\S+$/.test(v)) return true;
-  return true;
+  if (/^https:\/\/\S+$/i.test(v)) return true;
+  return isSingleEmoji(v);
 }
 
 export async function saveProfile(username, profileData) {

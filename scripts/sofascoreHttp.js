@@ -47,6 +47,8 @@ export async function fetchSofascore(endpointUrl, {
     throw new Error('URL de Sofascore no permitida');
   }
 
+  const shouldRetry = (message) => /^HTTP (429|5\d\d)$/.test(message);
+
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const res = await requestWithTimeout(endpointUrl, timeoutMs, request);
@@ -59,9 +61,7 @@ export async function fetchSofascore(endpointUrl, {
         throw new Error('Respuesta no JSON de Sofascore');
       }
     } catch (e) {
-      if (attempt === retries || e.message === 'NOT_FOUND' || e.message === 'URL de Sofascore no permitida') {
-        throw e;
-      }
+      if (attempt === retries || !shouldRetry(e.message)) throw e;
       await sleep(backoffDelay(attempt, random));
     }
   }

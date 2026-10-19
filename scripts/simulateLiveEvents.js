@@ -30,7 +30,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import mongoose from 'mongoose';
 import { connectDB, User, LiveEvent, MatchStats } from '../db/index.js';
-import { expireAtEndOfDayUTC } from '../api/liveEvents.js';
+import { liveEventExpireAt } from '../api/liveEvents.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -138,7 +138,7 @@ async function main() {
   }
 
   const kickoffMs = Date.now();
-  const expireAt = expireAtOfDay(kickoffMs);
+  const expireAt = liveEventExpireAt(kickoffMs);
   const tsOf = (m) => new Date(kickoffMs + (m + (m > 45 ? 15 : 0)) * 60000);
   const tsStatus = (k) => new Date(kickoffMs + ({ live1: 0, ht: 45, live2: 60, ft: 105 }[k]) * 60000);
 
@@ -313,7 +313,5 @@ async function main() {
   }
   process.exit(0);
 }
-
-function expireAtOfDay(nowMs) { return expireAtEndOfDayUTC(nowMs); }
 
 main().catch(e => { console.error(e); process.exit(1); });

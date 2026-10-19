@@ -45,8 +45,9 @@ export function mergeVary(res, value) {
   res.setHeader('Vary', tokens.join(', '));
 }
 
-export function isAllowedOrigin(origin) {
+export function isAllowedOrigin(origin, frontendUrl = process.env.FRONTEND_URL) {
   return ALLOWED_ORIGINS.includes(origin)
+    || (!!frontendUrl && origin === frontendUrl)
     || /^http:\/\/localhost(:\d+)?$/.test(origin || '');
 }
 

@@ -38,6 +38,17 @@ test('isValidAvatar rechaza valores no válidos', () => {
   assert.equal(isValidAvatar('" onerror="alert(1)'), false);
 });
 
+test('isValidAvatar solo acepta un emoji o una URL https', () => {
+  assert.equal(isValidAvatar('⚽⚽'), false);
+  assert.equal(isValidAvatar('abc'), false);
+  assert.equal(isValidAvatar('http://example.com/a.png'), false);
+  assert.equal(isValidAvatar('javascript:alert(1)'), false);
+  assert.equal(isValidAvatar('data:image/png;base64,AAAA'), false);
+  assert.equal(isValidAvatar('👨‍👩‍👧'), true);
+  assert.equal(isValidAvatar('🇪🇸'), true);
+  assert.equal(isValidAvatar('HTTPS://example.com/a.png'), true);
+});
+
 test('clientIp ignora XFF sin TRUST_PROXY', () => {
   const previous = process.env.TRUST_PROXY;
   delete process.env.TRUST_PROXY;
@@ -105,6 +116,12 @@ test('isAllowedOrigin solo acepta localhost exacto y orígenes explícitos', () 
   assert.equal(isAllowedOrigin('http://localhost.evil.com'), false);
   assert.equal(isAllowedOrigin('http://localhost:8080'), true);
   assert.equal(isAllowedOrigin('https://porra-spa.vercel.app'), true);
+});
+
+test('isAllowedOrigin incluye FRONTEND_URL además de la allowlist explícita', () => {
+  assert.equal(isAllowedOrigin('https://porra.example.com', 'https://porra.example.com'), true);
+  assert.equal(isAllowedOrigin('https://otro.example.com', 'https://porra.example.com'), false);
+  assert.equal(isAllowedOrigin('https://porra.example.com', 'https://frontend.example.com'), false);
 });
 
 test('isInsecureProductionSecret detecta produccion insegura', () => {
