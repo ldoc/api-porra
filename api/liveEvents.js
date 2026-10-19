@@ -26,7 +26,7 @@ export function foldScore(events) {
     if (t) return t;
     const s = (a.seq || 0) - (b.seq || 0);
     if (s) return s;
-    return (TYPE_RANK[a.type] || 0) - (TYPE_RANK[b.type] || 0);
+    return (TYPE_RANK[a.type] ?? 99) - (TYPE_RANK[b.type] ?? 99);
   });
   const byId = new Map(sorted.map(e => [e.sourceId, e]));
   let home = 0, away = 0;
@@ -47,9 +47,29 @@ export function foldScore(events) {
 let _rev = 0;
 function rev() { _rev += 1; return `${Date.now().toString(36)}-${_rev.toString(36)}`; }
 
+function isNewer(a, b) {
+  const t = new Date(a.ts).getTime() - new Date(b.ts).getTime();
+  if (t) return t > 0;
+  return (a.seq || 0) >= (b.seq || 0);
+}
+
+function latestEvent(events, type) {
+  let best = null;
+  for (const e of events) {
+    if (e.type !== type) continue;
+    if (!best || isNewer(e, best)) best = e;
+  }
+  return best;
+}
+
 function latestByPlayer(events, type) {
   const map = new Map();
-  for (const e of events) if (e.type === type) map.set(String(e.playerId), e);
+  for (const e of events) {
+    if (e.type !== type) continue;
+    const key = String(e.playerId);
+    const prev = map.get(key);
+    if (!prev || isNewer(e, prev)) map.set(key, e);
+  }
   return map;
 }
 
@@ -90,6 +110,7 @@ export function deriveEvents(obs, existing = [], nowMs = Date.now()) {
       payload: { starters: obs.starters } });
   }
 
+  // Incidencias minuto-mayor: (time, TYPE_RANK). El eje temporal es ts; TYPE_RANK solo desempata mismo minuto.
   const incidents = [...(obs.incidents || [])].sort((a, b) => {
     const d = (a.time ?? 0) - (b.time ?? 0);
     return d || ((TYPE_RANK[a.type] ?? 99) - (TYPE_RANK[b.type] ?? 99));
@@ -116,13 +137,6 @@ export function deriveEvents(obs, existing = [], nowMs = Date.now()) {
     }
   }
 
-  const prevRatings = latestByPlayer(existing, 'rating');
-  for (const [pid, rating] of Object.entries(obs.ratings || {})) {
-    const prev = prevRatings.get(String(pid));
-    if (prev && Number(prev.payload?.rating) === Number(rating)) continue;
-    push({ sourceId: `rating|${pid}|${rating}|${rev()}`, type: 'rating', playerId: Number(pid), minute: obs.minute ?? null, payload: { rating } });
-  }
-
   const prevAssists = latestByPlayer(existing, 'assist');
   for (const [pid, count] of Object.entries(obs.assists || {})) {
     const prev = prevAssists.get(String(pid));
@@ -131,9 +145,24 @@ export function deriveEvents(obs, existing = [], nowMs = Date.now()) {
     push({ sourceId: `assist|${pid}|${count}|${rev()}`, type: 'assist', playerId: Number(pid), minute: obs.minute ?? null, payload: { asistencias: Number(count) } });
   }
 
-  const folded = foldScore(existing);
-  if (obs.score && (folded.home !== obs.score.home || folded.away !== obs.score.away)) {
+  const prevRatings = latestByPlayer(existing, 'rating');
+  for (const [pid, rating] of Object.entries(obs.ratings || {})) {
+    const prev = prevRatings.get(String(pid));
+    if (prev && Number(prev.payload?.rating) === Number(rating)) continue;
+    push({ sourceId: `rating|${pid}|${rating}|${rev()}`, type: 'rating', playerId: Number(pid), minute: obs.minute ?? null, payload: { rating } });
+  }
+
+  const after = foldScore([...existing, ...out]);
+  const lastScore = latestEvent(existing, 'score');
+  const lastScoreMatches = !!lastScore && !!obs.score &&
+    Number(lastScore.payload?.scoreHome) === Number(obs.score.home) &&
+    Number(lastScore.payload?.scoreAway) === Number(obs.score.away);
+  const tickHasGoal = out.some(e => e.type === 'goal' || e.type === 'own_goal' || e.type === 'goal_cancelled');
+  if (obs.score && (after.home !== obs.score.home || after.away !== obs.score.away) &&
+      (!lastScoreMatches || tickHasGoal)) {
+    const lastOutTs = out.reduce((m, e) => Math.max(m, new Date(e.ts).getTime()), -Infinity);
     push({ sourceId: `score|${obs.score.home}-${obs.score.away}|${rev()}`, type: 'score', minute: obs.minute ?? null,
+      ts: new Date(Math.max(nowMs, lastOutTs + 1000)),
       payload: { scoreHome: obs.score.home, scoreAway: obs.score.away } });
   }
 
@@ -146,12 +175,13 @@ export function deriveEvents(obs, existing = [], nowMs = Date.now()) {
 }
 
 function findGoalToCancel(inc, existing, out) {
+  if (inc.teamId == null || inc.time == null) return null;
   const all = [...existing, ...out];
   const cancelled = new Set(all.filter(e => e.type === 'goal_cancelled').map(e => e.payload?.ofSourceId));
   const goals = all.filter(e => e.type === 'goal' && !cancelled.has(e.sourceId));
   const mine = goals.filter(e => {
-    if (inc.teamId != null && e.teamId !== inc.teamId) return false;
-    if (inc.time != null && e.minute != null && Math.abs(e.minute - inc.time) > 5) return false;
+    if (e.teamId !== inc.teamId) return false;
+    if (e.minute != null && Math.abs(e.minute - inc.time) > 5) return false;
     return true;
   });
   if (!mine.length) return null;

@@ -216,8 +216,8 @@ test('deriveEvents asigna seq creciente en orden canónico', () => {
     starters: [11, 12], score: { home: 1, away: 0 },
     incidents: [{ sourceId: 'g', type: 'goal', class: 'regular', time: 22, isHome: true, playerId: 11, homeScore: 1, awayScore: 0, teamId: 1 }] });
   const evs = deriveEvents(o, [], NOW);
-  assert.deepEqual(evs.map(e => e.type), ['status', 'lineup', 'goal', 'score']);
-  assert.deepEqual(evs.map(e => e.seq), [0, 1, 2, 3]);
+  assert.deepEqual(evs.map(e => e.type), ['status', 'lineup', 'goal']);
+  assert.deepEqual(evs.map(e => e.seq), [0, 1, 2]);
 });
 
 test('deriveEvents suma addedTime al ts', () => {
@@ -232,4 +232,81 @@ test('deriveEvents suma addedTime al ts', () => {
 test('deriveEvents etiqueta source scraper por defecto y sim si se indica', () => {
   assert.equal(deriveEvents(obs(), [], NOW)[0].source, 'scraper');
   assert.equal(deriveEvents(obs({ source: 'sim' }), [], NOW)[0].source, 'sim');
+});
+
+test('deriveEvents ordena incidencias del mismo minuto y emite assist antes de rating', () => {
+  const kickoffMs = Date.parse('2026-09-16T20:00:00Z');
+  const o = obs({ kickoffMs, starters: [], score: { home: 0, away: 0 },
+    assists: { 12: 1 }, ratings: { 11: 7.0 },
+    incidents: [
+      { sourceId: 'v', type: 'goal_cancelled', class: 'goalDisallowed', time: 50, teamId: 1, playerId: 11 },
+      { sourceId: 'g', type: 'goal', class: 'regular', time: 50, isHome: true, playerId: 11, homeScore: 1, awayScore: 0, teamId: 1 }
+    ] });
+  const evs = deriveEvents(o, [], NOW);
+  assert.deepEqual(evs.map(e => e.type), ['status', 'goal', 'goal_cancelled', 'assist', 'rating']);
+  assert.deepEqual(evs.map(e => e.seq), [0, 1, 2, 3, 4]);
+});
+
+test('assist absoluto permite A→B→A', () => {
+  const a = deriveEvents(obs({ assists: { 12: 1 } }), [], NOW);
+  const b = deriveEvents(obs({ assists: { 12: 2 } }), a, NOW + 1000);
+  const c = deriveEvents(obs({ assists: { 12: 1 } }), [...b, ...a], NOW + 2000);
+  assert.equal(a.filter(e => e.type === 'assist').length, 1);
+  assert.equal(b.filter(e => e.type === 'assist').length, 1);
+  assert.equal(c.filter(e => e.type === 'assist').length, 1);
+  assert.equal(c.find(e => e.type === 'assist').payload.asistencias, 1);
+});
+
+test('rating absoluto permite A→B→A', () => {
+  const a = deriveEvents(obs({ ratings: { 11: 7.0 } }), [], NOW);
+  const b = deriveEvents(obs({ ratings: { 11: 7.5 } }), a, NOW + 1000);
+  const c = deriveEvents(obs({ ratings: { 11: 7.0 } }), [...b, ...a], NOW + 2000);
+  assert.equal(a.filter(e => e.type === 'rating').length, 1);
+  assert.equal(b.filter(e => e.type === 'rating').length, 1);
+  assert.equal(c.filter(e => e.type === 'rating').length, 1);
+  assert.equal(c.find(e => e.type === 'rating').payload.rating, 7.0);
+});
+
+test('deriveEvents aplica +15 de descanso a un gol del minuto 50', () => {
+  const kickoffMs = Date.parse('2026-09-16T20:00:00Z');
+  const o = obs({ kickoffMs, score: { home: 1, away: 0 }, incidents: [
+    { sourceId: 'g', type: 'goal', class: 'regular', time: 50, isHome: true, playerId: 11, homeScore: 1, awayScore: 0, teamId: 1 }
+  ] });
+  const g = deriveEvents(o, [], NOW).find(e => e.type === 'goal');
+  assert.equal(new Date(g.ts).toISOString(), '2026-09-16T21:05:00.000Z');
+});
+
+test('deriveEvents mantiene el plegado igual a obs.score con gol tardío tras un score existente', () => {
+  const kickoffMs = Date.parse('2026-09-16T20:00:00Z');
+  const existingScore = { sourceId: 'score|1-0|prev', type: 'score', seq: 0,
+    ts: new Date(kickoffMs + 90 * 60000), payload: { scoreHome: 1, scoreAway: 0 } };
+  const o = obs({ kickoffMs, period: 'period2', minute: 85, score: { home: 2, away: 0 }, incidents: [
+    { sourceId: 'g2', type: 'goal', class: 'regular', time: 80, isHome: true, playerId: 11, homeScore: 2, awayScore: 0, teamId: 1 }
+  ] });
+  const evs = deriveEvents(o, [existingScore], NOW);
+  assert.equal(evs.filter(e => e.type === 'score').length, 0);
+  assert.deepEqual(foldScore([existingScore, ...evs]), { home: 2, away: 0 });
+});
+
+test('el score reconcilia despues de un gol en el 90+5', () => {
+  const kickoffMs = Date.parse('2026-09-16T20:00:00Z');
+  const o = obs({ kickoffMs, period: 'period2', minute: 95, score: { home: 2, away: 0 }, incidents: [
+    { sourceId: 'g', type: 'goal', class: 'regular', time: 90, addedTime: 5, isHome: true, playerId: 11, homeScore: 1, awayScore: 0, teamId: 1 }
+  ] });
+  const evs = deriveEvents(o, [], NOW);
+  const g = evs.find(e => e.type === 'goal');
+  const s = evs.find(e => e.type === 'score');
+  assert.ok(s);
+  assert.ok(new Date(s.ts).getTime() > new Date(g.ts).getTime());
+  assert.deepEqual(foldScore(evs), { home: 2, away: 0 });
+});
+
+test('findGoalToCancel devuelve null si falta teamId o time', () => {
+  const goal = { sourceId: 'goal|g1', type: 'goal', teamId: 1, minute: 40,
+    payload: { isHome: true } };
+  const o = obs({ score: { home: 1, away: 0 }, incidents: [
+    { sourceId: 'v', type: 'goal_cancelled', class: 'goalDisallowed', teamId: 1, playerId: 11 }
+  ] });
+  const cancel = deriveEvents(o, [goal], NOW).find(e => e.type === 'goal_cancelled');
+  assert.equal(cancel.payload.ofSourceId, null);
 });
