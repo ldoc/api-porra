@@ -151,8 +151,9 @@ export function isValidAvatar(value) {
   if (typeof value !== 'string') return false;
   const v = value.trim();
   if (!v || v.length > 200) return false;
+  if (/[<>&"'`]/.test(v)) return false;
   if (/^https:\/\/\S+$/.test(v)) return true;
-  return !/[<>&"'`]/.test(v);
+  return true;
 }
 
 export async function saveProfile(username, profileData) {
@@ -169,7 +170,9 @@ export async function saveProfile(username, profileData) {
     return { ok: false, error: 'Usuario no encontrado' };
   }
 
-  user.avatar = profileData.avatar || user.avatar;
+  if (profileData.avatar != null) {
+    user.avatar = profileData.avatar.trim();
+  }
   await user.save();
 
   return {

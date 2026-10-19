@@ -12,7 +12,7 @@ import { connectDB, User, Invitation, MatchStats, Message, LiveMatch, LiveEvent 
 import GameConfig from './db/models/GameConfig.js';
 import { register, login, getProfile, saveProfile, getTakenAvatars, getAllPlayers, getSquad, saveSquad, changePassword } from './api/auth.js';
 import { scrapMatchStats } from './scripts/matchStats.js';
-import { authenticate, rateLimiter, checkBodySize, setSecurityHeaders, validateUsername, authRateLimiter } from './api/middleware.js';
+import { authenticate, rateLimiter, checkBodySize, setSecurityHeaders, validateUsername, authRateLimiter, mergeVary, isAllowedOrigin, isInsecureProductionSecret } from './api/middleware.js';
 import { getFinalPredictionsViolations } from './api/finalPredictions.js';
 import { validateFasesFechas } from './api/fasesFechas.js';
 import { validateMessage } from './api/messageValidation.js';
@@ -130,19 +130,12 @@ const FASES_VALIDAS = fasesData.fases.map(f => f.nombre);
 
 function setCorsHeaders(req, res) {
   const origin = req.headers['origin'];
-  const allowedOrigins = [
-    'https://porra-spa.vercel.app',
-    'http://localhost:5173',
-    'http://localhost:3000',
-    'http://localhost:8080'
-  ];
-  const isLocal = /^http:\/\/localhost(:\d+)?$/.test(origin || '');
-  if (allowedOrigins.includes(origin) || isLocal) {
+  if (isAllowedOrigin(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
   } else {
     res.setHeader('Access-Control-Allow-Origin', FRONTEND_URL);
   }
-  res.setHeader('Vary', 'Origin');
+  mergeVary(res, 'Origin');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Client-Phase');
 }
@@ -204,15 +197,14 @@ function sendJson(req, res, statusCode, data, cacheSeconds) {
 }
 
 function sendJsonPrivate(req, res, statusCode, data, cacheSeconds) {
-  res.setHeader('Vary', 'Authorization');
+  mergeVary(res, 'Authorization');
   if (cacheSeconds) {
     res.setHeader('Cache-Control', `private, max-age=${cacheSeconds}, stale-while-revalidate=${cacheSeconds * 2}`);
   }
   sendJson(req, res, statusCode, data);
 }
 
-if (process.env.NODE_ENV === 'production'
-  && (!JWT_SECRET || JWT_SECRET === 'porra-ucl-champions-2026-secret-key-change-in-production')) {
+if (isInsecureProductionSecret(process.env.NODE_ENV, JWT_SECRET)) {
   console.error('JWT_SECRET inseguro en produccion');
   process.exit(1);
 }

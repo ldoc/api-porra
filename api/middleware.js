@@ -1,6 +1,13 @@
 import jwt from 'jsonwebtoken';
 
 const JWT_SECRET = process.env.JWT_SECRET;
+const INSECURE_JWT_SECRET = 'porra-ucl-champions-2026-secret-key-change-in-production';
+const ALLOWED_ORIGINS = [
+  'https://porra-spa.vercel.app',
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'http://localhost:8080'
+];
 
 export function authenticate(req) {
   const authHeader = req.headers['authorization'];
@@ -23,6 +30,28 @@ export function clientIp(req) {
     if (/^[0-9a-fA-F:.]{3,45}$/.test(xff)) return xff;
   }
   return req.socket?.remoteAddress || 'unknown';
+}
+
+export function mergeVary(res, value) {
+  const current = String(res.getHeader('Vary') || '');
+  const tokens = current.split(',').map(token => token.trim()).filter(Boolean);
+
+  for (const token of String(value).split(',').map(item => item.trim()).filter(Boolean)) {
+    if (!tokens.some(existing => existing.toLowerCase() === token.toLowerCase())) {
+      tokens.push(token);
+    }
+  }
+
+  res.setHeader('Vary', tokens.join(', '));
+}
+
+export function isAllowedOrigin(origin) {
+  return ALLOWED_ORIGINS.includes(origin)
+    || /^http:\/\/localhost(:\d+)?$/.test(origin || '');
+}
+
+export function isInsecureProductionSecret(env, secret) {
+  return env === 'production' && (!secret || secret === INSECURE_JWT_SECRET);
 }
 
 export function rateLimiter({ windowMs = 15 * 60 * 1000, max = 10, keyFn } = {}) {

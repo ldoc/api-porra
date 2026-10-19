@@ -3,13 +3,29 @@ import assert from 'node:assert/strict';
 
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret';
 
-const { isValidAvatar } = await import('../api/auth.js');
-const { clientIp } = await import('../api/middleware.js');
+const { isValidAvatar, saveProfile } = await import('../api/auth.js');
+const {
+  clientIp,
+  mergeVary,
+  isAllowedOrigin,
+  isInsecureProductionSecret
+} = await import('../api/middleware.js');
 
 test('isValidAvatar rechaza HTML y acepta emoji/https', () => {
   assert.equal(isValidAvatar('<img src=x onerror=alert(1)>'), false);
   assert.equal(isValidAvatar('⚽'), true);
   assert.equal(isValidAvatar('https://example.com/a.png'), true);
+});
+
+test('isValidAvatar rechaza metacaracteres HTML incluso en URLs https', () => {
+  assert.equal(isValidAvatar('https://x/"><img/src=x/onerror=alert(1)>'), false);
+});
+
+test('saveProfile rechaza avatares inválidos antes de tocar la BD', async () => {
+  const result = await saveProfile('usuario', {
+    avatar: 'https://x/"><img/src=x/onerror=alert(1)>'
+  });
+  assert.deepEqual(result, { ok: false, error: 'Avatar inválido' });
 });
 
 test('isValidAvatar rechaza valores no válidos', () => {
@@ -69,4 +85,34 @@ test('clientIp rechaza XFF no sanitizada y usa el socket', () => {
 
 test('clientIp devuelve unknown si no hay socket', () => {
   assert.equal(clientIp({ headers: {} }), 'unknown');
+});
+
+test('mergeVary conserva Origin y añade Authorization sin duplicar', () => {
+  const headers = new Map();
+  const res = {
+    getHeader: name => headers.get(name),
+    setHeader: (name, value) => headers.set(name, value)
+  };
+
+  mergeVary(res, 'Origin');
+  mergeVary(res, 'Authorization');
+  mergeVary(res, 'origin');
+
+  assert.equal(res.getHeader('Vary'), 'Origin, Authorization');
+});
+
+test('isAllowedOrigin solo acepta localhost exacto y orígenes explícitos', () => {
+  assert.equal(isAllowedOrigin('http://localhost.evil.com'), false);
+  assert.equal(isAllowedOrigin('http://localhost:8080'), true);
+  assert.equal(isAllowedOrigin('https://porra-spa.vercel.app'), true);
+});
+
+test('isInsecureProductionSecret detecta produccion insegura', () => {
+  const placeholder = 'porra-ucl-champions-2026-secret-key-change-in-production';
+
+  assert.equal(isInsecureProductionSecret('production', undefined), true);
+  assert.equal(isInsecureProductionSecret('production', ''), true);
+  assert.equal(isInsecureProductionSecret('production', placeholder), true);
+  assert.equal(isInsecureProductionSecret('production', 'secreto-seguro'), false);
+  assert.equal(isInsecureProductionSecret('development', undefined), false);
 });
