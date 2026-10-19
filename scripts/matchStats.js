@@ -21,6 +21,16 @@ function processPlayer(playerEntry, teamId, assistsMap) {
     };
 }
 
+const gkPenaltyCache = new Map();
+
+function incidentsHasPenalty(incidentsData) {
+    return (incidentsData?.incidents || []).some(i =>
+        i.incidentType === 'inGamePenalty' ||
+        i.incidentType === 'penalty' ||
+        i.incidentClass === 'penalty'
+    );
+}
+
 async function fetchPlayerStatistics(eventId, playerId) {
     const statsUrl = `https://www.sofascore.com/api/v1/event/${eventId}/player/${playerId}/statistics`;
     try {
@@ -131,9 +141,16 @@ export async function scrapMatchFull(eventId, raw = null) {
     const allPlayers = [...homePlayers, ...awayPlayers];
 
     const goalkeepers = allPlayers.filter(p => p.posicion === 'G' && p.minutos > 0);
+    const refreshPenalties = incidentsHasPenalty(incidentsData);
     const gkStatsPromises = goalkeepers.map(async (gk) => {
-        const penaltySave = await fetchPlayerStatistics(eventId, gk.id);
-        gk.penaltiParado = penaltySave;
+        const key = `${eventId}:${gk.id}`;
+        if (gkPenaltyCache.has(key) && !refreshPenalties) {
+            gk.penaltiParado = gkPenaltyCache.get(key);
+        } else {
+            const penaltySave = await fetchPlayerStatistics(eventId, gk.id);
+            gkPenaltyCache.set(key, penaltySave);
+            gk.penaltiParado = penaltySave;
+        }
     });
     await Promise.all(gkStatsPromises);
 

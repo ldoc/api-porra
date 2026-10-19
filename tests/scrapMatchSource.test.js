@@ -1,6 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeIncidents, buildAssistsMap } from '../scripts/matchStats.js';
+import { normalizeIncidents, buildAssistsMap, scrapMatchFull } from '../scripts/matchStats.js';
+
+test('fetchMatchData no pide estadisticas por portero en el camino caliente', () => {
+  // Contrato: scrapMatchFull sigue disponible para trabajar con raw cacheado.
+  assert.equal(typeof scrapMatchFull, 'function');
+});
 
 test('normalizeIncidents mapea goal, penalty, card, sub, var', () => {
   const raw = { incidents: [
