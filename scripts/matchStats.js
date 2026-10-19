@@ -191,7 +191,10 @@ export async function fetchMatchData(eventId, { lineupsData, fantasyData, fetche
         try {
             fetchedLineupsData = await fetchLineupsFn(eventId);
         } catch (e) {
-            if (!notStarted) throw e;
+            // Not-started matches may legitimately have no lineups yet. Once the
+            // match is running, stale/empty lineups would freeze ratings, so the
+            // failure is surfaced and the tick is skipped.
+            if (!notStarted) failures.push({ endpoint: 'lineups', message: e.message });
         }
     }
 
@@ -204,8 +207,15 @@ export async function fetchMatchData(eventId, { lineupsData, fantasyData, fetche
     };
 }
 
+function assertLineupsAvailable(raw) {
+    const failure = (raw?.failures || []).find(f => f.endpoint === 'lineups');
+    if (failure) throw new Error(failure.message);
+}
+
 export async function scrapMatchFull(eventId, raw = null) {
-    const { eventData, incidentsData, fantasyData, lineupsData } = raw ?? await fetchMatchData(eventId);
+    const data = raw ?? await fetchMatchData(eventId);
+    assertLineupsAvailable(data);
+    const { eventData, incidentsData, fantasyData, lineupsData } = data;
 
     const ev = eventData.event;
 
@@ -320,7 +330,9 @@ export function normalizeIncidents(incidentsData, homeTeamId, awayTeamId) {
 }
 
 export async function scrapMatchSource(eventId, raw = null) {
-    const { eventData, incidentsData, fantasyData, lineupsData } = raw ?? await fetchMatchData(eventId);
+    const data = raw ?? await fetchMatchData(eventId);
+    assertLineupsAvailable(data);
+    const { eventData, incidentsData, fantasyData, lineupsData } = data;
 
     const ev = eventData.event;
     const homeTeamId = ev.homeTeam?.id;

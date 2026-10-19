@@ -78,6 +78,30 @@ test('fetchMatchData registra fallos de incidents/fantasy y reintenta en el sigu
     assert.deepEqual(retried.incidentsData, { incidents: [] });
 });
 
+test('fetchMatchData registra fallo de lineups sin derivar y recupera en el siguiente tick', async () => {
+    let lineupsFail = true;
+    const fetchers = {
+        fetchEvent: async () => eventData(),
+        fetchIncidents: async () => ({ incidents: [] }),
+        fetchFantasy: async () => ({ playerStatistics: [] }),
+        fetchLineups: async () => {
+            if (lineupsFail) throw new Error('HTTP 502');
+            return lineupsWithRating(7.4);
+        }
+    };
+
+    const failed = await fetchMatchData(103, { fetchers });
+    assert.equal(failed.lineupsData, null);
+    assert.deepEqual(failed.failures, [{ endpoint: 'lineups', message: 'HTTP 502' }]);
+    await assert.rejects(scrapMatchSource(103, failed), /HTTP 502/);
+
+    lineupsFail = false;
+    const retried = await fetchMatchData(103, { fetchers });
+    assert.deepEqual(retried.failures, []);
+    const obs = await scrapMatchSource(103, retried);
+    assert.equal(obs.ratings[11], 7.4);
+});
+
 test('penaltyIncidentIds detecta solo incidencias de penalti', () => {
     const data = { incidents: [
         { id: 1, incidentType: 'inGamePenalty', incidentClass: 'missed' },

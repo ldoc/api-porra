@@ -10,7 +10,8 @@ import { selectLiveMatches, buildLiveDoc, liveStatusFromSofascore, buildScrapeLo
 import {
   liveSnapshotHash,
   isDuplicateWriteError,
-  criticalFetchFailures
+  criticalFetchFailures,
+  scrapeHealth
 } from './liveScraper.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -110,8 +111,10 @@ async function tick() {
           stats.failed++;
           stats.criticalFailed++;
           for (const failure of failures) {
+            const status = Number(/^HTTP (\d+)/.exec(failure.message)?.[1]) || null;
             console.error(JSON.stringify({
-              t: stamp(), eventId: m.id, endpoint: failure.endpoint, error: failure.message
+              t: stamp(), eventId: m.id, endpoint: failure.endpoint,
+              status, error: failure.message
             }));
           }
           // No hash/snapshot advancement: next tick retries the failed data.
@@ -174,8 +177,7 @@ async function tick() {
     stats.fatal = true;
     throw e;
   } finally {
-    const healthy = !stats.fatal && stats.criticalFailed === 0
-      && !(stats.attempted > 0 && stats.failed >= stats.attempted);
+    const healthy = scrapeHealth(stats);
     await recordScrape({ startedMs, ...stats, healthy });
   }
 }

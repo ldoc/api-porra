@@ -4,7 +4,8 @@ import {
   liveSnapshotHash,
   isDuplicateWriteError,
   criticalFetchFailures,
-  hasCriticalFetchFailure
+  hasCriticalFetchFailure,
+  scrapeHealth
 } from '../scripts/liveScraper.js';
 
 function baseObs() {
@@ -90,15 +91,30 @@ test('isDuplicateWriteError: códigos reales y casos límite', () => {
   assert.equal(isDuplicateWriteError({ writeErrors: [] }), false);
 });
 
-test('criticalFetchFailures detecta incidents/fantasy y ignora otros endpoints', () => {
+test('criticalFetchFailures detecta incidents/fantasy/lineups', () => {
   const raw = { failures: [
     { endpoint: 'incidents', message: 'HTTP 500' },
-    { endpoint: 'lineups', message: 'TIMEOUT' }
+    { endpoint: 'lineups', message: 'HTTP 502' },
+    { endpoint: 'other', message: 'TIMEOUT' }
   ] };
-  assert.deepEqual(criticalFetchFailures(raw), [{ endpoint: 'incidents', message: 'HTTP 500' }]);
+  assert.deepEqual(criticalFetchFailures(raw), [
+    { endpoint: 'incidents', message: 'HTTP 500' },
+    { endpoint: 'lineups', message: 'HTTP 502' }
+  ]);
   assert.equal(hasCriticalFetchFailure(raw), true);
-  assert.equal(hasCriticalFetchFailure({ failures: [{ endpoint: 'lineups', message: 'x' }] }), false);
+  assert.equal(hasCriticalFetchFailure({ failures: [{ endpoint: 'lineups', message: 'x' }] }), true);
   assert.equal(hasCriticalFetchFailure(null), false);
+});
+
+test('un fallo de lineups cuenta como partido fallido y deja health en false; recovery vuelve a true', () => {
+  const failed = { failures: [{ endpoint: 'lineups', message: 'HTTP 502' }] };
+  const stats = { attempted: 1, failed: 1, criticalFailed: 1, fatal: false };
+  assert.equal(hasCriticalFetchFailure(failed), true);
+  assert.equal(scrapeHealth(stats), false);
+
+  const recovered = { failures: [] };
+  assert.equal(hasCriticalFetchFailure(recovered), false);
+  assert.equal(scrapeHealth({ attempted: 1, failed: 0, criticalFailed: 0, fatal: false }), true);
 });
 
 test('criticalFetchFailures no avanza el hash si incidents falla y reintenta al recuperarse', () => {

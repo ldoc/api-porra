@@ -24,7 +24,7 @@ export function isDuplicateWriteError(e) {
   return e.code === 11000;
 }
 
-const CRITICAL_ENDPOINTS = new Set(['incidents', 'fantasy']);
+const CRITICAL_ENDPOINTS = new Set(['incidents', 'fantasy', 'lineups']);
 
 export function criticalFetchFailures(raw) {
   return (raw?.failures || []).filter(f => CRITICAL_ENDPOINTS.has(f.endpoint));
@@ -32,4 +32,9 @@ export function criticalFetchFailures(raw) {
 
 export function hasCriticalFetchFailure(raw) {
   return criticalFetchFailures(raw).length > 0;
+}
+
+export function scrapeHealth({ fatal = false, criticalFailed = 0, attempted = 0, failed = 0 } = {}) {
+  return !fatal && criticalFailed === 0
+    && !(attempted > 0 && failed >= attempted);
 }
