@@ -18,6 +18,7 @@ const liveEventSchema = new mongoose.Schema({
 
 liveEventSchema.index({ eventId: 1, sourceId: 1 }, { unique: true });
 liveEventSchema.index({ eventId: 1, ts: 1 });
+liveEventSchema.index({ source: 1, ingestedAt: 1 });
 liveEventSchema.index({ expireAt: 1 }, { expireAfterSeconds: 0 });
 
 const LiveEvent = mongoose.model('LiveEvent', liveEventSchema);

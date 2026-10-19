@@ -24,6 +24,12 @@ test('LiveEvent exige ingestedAt y no duplica el índice de eventId', () => {
   assert.equal(single, undefined, 'índice single {eventId} debería eliminarse');
 });
 
+test('LiveEvent declara índice delta {source, ingestedAt}', () => {
+  const idx = LiveEvent.schema.indexes();
+  const delta = idx.find(([keys]) => keys.source === 1 && keys.ingestedAt === 1);
+  assert.ok(delta, 'falta índice {source, ingestedAt} para la version/delta');
+});
+
 test('LiveEvent declara seq, source e índice {eventId, ts}', () => {
   assert.equal(LiveEvent.schema.path('seq').instance, 'Number');
   assert.equal(LiveEvent.schema.path('seq').defaultValue, 0);

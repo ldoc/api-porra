@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildLiveEventsResponse, liveEventsQuery, maxIngestedAt } from '../api/live.js';
+import { buildLiveEventsResponse, liveEventsQuery, maxIngestedAt, liveEventsVersion, shouldReturn304 } from '../api/live.js';
 import { computeWeakEtag, etagMatches } from '../api/etag.js';
 
 test('buildLiveEventsResponse ordena por ts y usa el serverTime recibido', () => {
@@ -85,4 +85,32 @@ test('GET /api/live/events: nuevo evento (serverTime cambia) => ETag distinto', 
   const before = computeWeakEtag(JSON.stringify(buildLiveEventsResponse(docs, '2026-09-16T20:02:00.000Z')));
   const after = computeWeakEtag(JSON.stringify(buildLiveEventsResponse(docs, '2026-09-16T20:05:00.000Z')));
   assert.notEqual(before, after);
+});
+
+test('la version del endpoint cambia cuando cambia ingestedAt maximo', () => {
+  assert.equal(liveEventsVersion([{ ingestedAt: new Date('2026-09-16T20:01:00Z') }]), '2026-09-16T20:01:00.000Z');
+  assert.notEqual(
+    liveEventsVersion([{ ingestedAt: new Date('2026-09-16T20:01:00Z') }]),
+    liveEventsVersion([{ ingestedAt: new Date('2026-09-16T20:02:00Z') }])
+  );
+});
+
+test('liveEventsVersion sin docs devuelve epoch', () => {
+  assert.equal(liveEventsVersion([]), '1970-01-01T00:00:00.000Z');
+  assert.equal(liveEventsVersion(null), '1970-01-01T00:00:00.000Z');
+});
+
+test('shouldReturn304 exige version, since, source y ETag coincidentes', () => {
+  const cached = { version: '2026-09-16T20:01:00.000Z', since: '', etag: 'W/"abc"', source: 'default' };
+  const base = { cached, version: cached.version, since: '', source: 'default', ifNoneMatch: 'W/"abc"' };
+  assert.equal(shouldReturn304(base), true);
+  assert.equal(shouldReturn304({ ...base, ifNoneMatch: undefined }), false);
+  assert.equal(shouldReturn304({ ...base, version: '2026-09-16T20:02:00.000Z' }), false);
+  assert.equal(shouldReturn304({ ...base, since: '2026-09-16T20:00:00.000Z' }), false);
+  assert.equal(shouldReturn304({ ...base, source: 'sim' }), false);
+  assert.equal(shouldReturn304({ ...base, cached: { ...cached, etag: null } }), false);
+});
+
+test('shouldReturn304 sin cache no devuelve 304', () => {
+  assert.equal(shouldReturn304({ cached: null, version: 'v1', since: '', ifNoneMatch: 'W/"abc"' }), false);
 });

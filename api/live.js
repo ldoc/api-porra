@@ -1,3 +1,5 @@
+import { etagMatches } from './etag.js';
+
 export const LIVE_REFRESH_DEFAULT = 60;
 const MATCH_DURATION_S = 2 * 3600;
 const PRE_WINDOW_S = 15 * 60;
@@ -60,6 +62,20 @@ export function maxIngestedAt(docs) {
     const t = d.ingestedAt ? new Date(d.ingestedAt).getTime() : 0;
     return t > max ? t : max;
   }, 0);
+}
+
+export function liveEventsVersion(docs) {
+  return new Date(maxIngestedAt(docs) || 0).toISOString();
+}
+
+export function shouldReturn304({ cached, version, since, source = '', ifNoneMatch }) {
+  return Boolean(
+    cached?.etag &&
+    cached.version === version &&
+    cached.since === since &&
+    (cached.source || '') === (source || '') &&
+    etagMatches(ifNoneMatch, cached.etag)
+  );
 }
 
 export function buildLiveEventsResponse(docs, serverTime = null, resync = false) {

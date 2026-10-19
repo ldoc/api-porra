@@ -12,7 +12,7 @@ import { connectDB, User, Invitation, MatchStats, Message, LiveMatch, LiveEvent 
 import GameConfig from './db/models/GameConfig.js';
 import { register, login, getProfile, saveProfile, getTakenAvatars, getAllPlayers, getSquad, saveSquad, changePassword } from './api/auth.js';
 import { scrapMatchStats } from './scripts/matchStats.js';
-import { authenticate, rateLimiter, checkBodySize, setSecurityHeaders, validateUsername, authRateLimiter, mergeVary, isAllowedOrigin, isInsecureProductionSecret } from './api/middleware.js';
+import { authenticate, rateLimiter, checkBodySize, setSecurityHeaders, validateUsername, authRateLimiter, mergeVary, isAllowedOrigin, isInsecureProductionSecret, clientIp } from './api/middleware.js';
 import { getFinalPredictionsViolations } from './api/finalPredictions.js';
 import { validateFasesFechas } from './api/fasesFechas.js';
 import { validateMessage } from './api/messageValidation.js';
@@ -20,7 +20,7 @@ import { computeWeakEtag, etagMatches } from './api/etag.js';
 import { parseSinceParam } from './api/matchStatsFilter.js';
 import { calculateUserStandings, getLigaMatchIds, getMatchFaseMap } from './api/standings.js';
 import { guestReadFilter, canSeeGuests, bypassesGameLocks, guestEditingEnabled } from './api/guest.js';
-import { getLiveRefreshSecs, buildLiveResponse, buildLiveEventsResponse, liveEventsQuery, maxIngestedAt } from './api/live.js';
+import { getLiveRefreshSecs, buildLiveResponse, buildLiveEventsResponse, liveEventsQuery, maxIngestedAt, shouldReturn304 } from './api/live.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -33,6 +33,21 @@ const loginLimiter = rateLimiter({ windowMs: 15 * 60 * 1000, max: 10 });
 const registerLimiter = rateLimiter({ windowMs: 15 * 60 * 1000, max: 5 });
 const globalLimiter = rateLimiter({ windowMs: 60 * 1000, max: 120 });
 const authenticatedLimiter = authRateLimiter({ windowMs: 60 * 1000, max: 30 });
+const liveNoSinceLimiter = rateLimiter({ windowMs: 60 * 1000, max: 30, keyFn: clientIp });
+
+let liveVersionCache = { key: null, version: null, at: 0 };
+let liveBodyCache = { source: null, version: null, since: null, etag: null };
+
+async function currentLiveVersion(filter) {
+  const key = JSON.stringify(filter);
+  if (liveVersionCache.key === key && Date.now() - liveVersionCache.at < 2000) {
+    return liveVersionCache.version;
+  }
+  const last = await LiveEvent.findOne(filter, { ingestedAt: 1 }).sort({ ingestedAt: -1 }).lean();
+  const version = last ? new Date(last.ingestedAt).toISOString() : null;
+  liveVersionCache = { key, version, at: Date.now() };
+  return version;
+}
 
 async function getFaseJuego() {
   try {
@@ -135,7 +150,7 @@ function setCorsHeaders(req, res) {
   } else {
     res.setHeader('Access-Control-Allow-Origin', FRONTEND_URL);
   }
-  mergeVary(res, 'Origin');
+  mergeVary(res, 'Origin, Accept-Encoding');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Client-Phase');
 }
@@ -1278,13 +1293,49 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       const wantSim = process.env.NODE_ENV !== 'production' && reqUrl.searchParams.get('source') === 'sim';
+      const sourceFilter = wantSim ? { source: 'sim' } : { source: { $ne: 'sim' } };
+      const sourceKey = wantSim ? 'sim' : 'default';
+      const sinceKey = sinceResult.date ? sinceResult.date.toISOString() : '';
+      const version = await currentLiveVersion(sourceFilter);
+
+      if (shouldReturn304({
+        cached: liveBodyCache,
+        version,
+        since: sinceKey,
+        source: sourceKey,
+        ifNoneMatch: req.headers['if-none-match']
+      })) {
+        res.writeHead(304, {
+          ETag: liveBodyCache.etag,
+          'Cache-Control': 'public, max-age=28, stale-while-revalidate=56'
+        });
+        res.end();
+        return;
+      }
+
+      if (!sinceResult.date) {
+        const rate = liveNoSinceLimiter(req);
+        if (!rate.ok) {
+          sendJson(req, res, rate.status, { ok: false, error: rate.error });
+          return;
+        }
+      }
+
       const filter = liveEventsQuery(sinceResult.date, { excludeSim: !wantSim });
       if (wantSim) filter.source = 'sim';
-      const docs = await LiveEvent.find(filter).sort({ ingestedAt: 1, seq: 1 }).lean();
+      filter.expireAt = { $gt: new Date() };
+      const docs = await LiveEvent.find(filter, '-_id -expireAt')
+        .sort({ ingestedAt: 1, seq: 1 }).limit(5000).lean();
       const max = maxIngestedAt(docs);
       const serverTime = docs.length ? new Date(max).toISOString()
         : (sinceResult.date ? sinceResult.date.toISOString() : null);
-      sendJson(req, res, 200, buildLiveEventsResponse(docs, serverTime));
+      const data = buildLiveEventsResponse(
+        docs.map(({ ingestedAt, ...rest }) => rest),
+        serverTime
+      );
+      const json = JSON.stringify(data);
+      liveBodyCache = { source: sourceKey, version, since: sinceKey, etag: computeWeakEtag(json) };
+      sendJson(req, res, 200, data, 28);
     } catch (e) {
       sendJson(req, res, 500, { ok: false, error: 'Error al obtener eventos live' });
     }
