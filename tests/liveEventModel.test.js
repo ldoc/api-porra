@@ -44,5 +44,17 @@ test('expireAt usa el dia del kickoff, no el de ingesta', () => {
   const kickoff = Date.parse('2026-09-16T22:30:00Z');
   const ingest = Date.parse('2026-09-17T00:10:00Z');
   const evs = deriveEvents({ eventId: 1, status: 'FT', kickoffMs: kickoff, score: { home: 0, away: 0 } }, [], ingest);
+  assert.equal(new Date(evs[0].expireAt).toISOString(), '2026-09-17T01:30:00.000Z');
+});
+
+test('expireAt mantiene el fin de dia si kickoff+3h cae antes', () => {
+  const kickoff = Date.parse('2026-09-16T18:00:00Z');
+  const evs = deriveEvents({ eventId: 1, status: 'FT', kickoffMs: kickoff, score: { home: 0, away: 0 } }, [], kickoff);
   assert.equal(new Date(evs[0].expireAt).toISOString(), '2026-09-16T23:59:59.000Z');
+});
+
+test('expireAt cubre kickoff+3h cuando cruza medianoche UTC', () => {
+  const kickoff = Date.parse('2026-09-16T21:30:00Z');
+  const evs = deriveEvents({ eventId: 1, status: 'FT', kickoffMs: kickoff, score: { home: 0, away: 0 } }, [], kickoff);
+  assert.equal(new Date(evs[0].expireAt).toISOString(), '2026-09-17T00:30:00.000Z');
 });

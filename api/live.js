@@ -108,8 +108,12 @@ export function buildScrapeLog({ startedMs, nowMs, live = 0, ok = 0, inserted = 
   };
 }
 
-export function buildLiveHealth(lastScrapeAt) {
+export function buildLiveHealth(lastScrapeAt, lastScrapeOk, nowMs = Date.now(), staleMs = 90000) {
   const date = lastScrapeAt instanceof Date ? lastScrapeAt : new Date(lastScrapeAt);
   const valid = lastScrapeAt != null && !Number.isNaN(date.getTime());
-  return { ok: true, lastScrapeAt: valid ? date.toISOString() : null };
+  const fresh = valid && nowMs - date.getTime() <= staleMs;
+  return {
+    ok: valid && fresh && lastScrapeOk !== false,
+    lastScrapeAt: valid ? date.toISOString() : null
+  };
 }

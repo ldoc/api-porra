@@ -1288,10 +1288,11 @@ const server = http.createServer(async (req, res) => {
   // Endpoint: salud del scraper live (sin datos internos)
   if (reqUrl.pathname === '/api/live/health' && req.method === 'GET') {
     try {
-      const config = await GameConfig.findById('gameConfig', 'lastScrapeAt').lean();
+      const config = await GameConfig.findById('gameConfig', 'lastScrapeAt lastScrapeOk').lean();
       res.setHeader('Cache-Control', 'no-store');
-      sendJson(req, res, 200, buildLiveHealth(config?.lastScrapeAt));
+      sendJson(req, res, 200, buildLiveHealth(config?.lastScrapeAt, config?.lastScrapeOk));
     } catch (e) {
+      console.error('Error obteniendo health live:', e);
       sendJson(req, res, 500, { ok: false, lastScrapeAt: null });
     }
     return;

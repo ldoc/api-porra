@@ -26,6 +26,7 @@ const gameConfigSchema = new mongoose.Schema({
   },
   liveRefreshSecs: { type: Number, default: 30 },
   lastScrapeAt: { type: Date, default: null },
+  lastScrapeOk: { type: Boolean, default: null },
   updatedBy: { type: String },
   updatedAt: { type: Date }
 }, {

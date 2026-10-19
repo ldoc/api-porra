@@ -78,7 +78,11 @@ function latestByPlayer(events, type) {
 export function deriveEvents(obs, existing = [], nowMs = Date.now()) {
   const have = new Set(existing.map(e => e.sourceId));
   const out = [];
-  const expireAt = expireAtEndOfDayUTC(obs.kickoffMs != null ? obs.kickoffMs : nowMs);
+  const kickoff = obs.kickoffMs != null ? obs.kickoffMs : nowMs;
+  const expireAt = new Date(Math.max(
+    expireAtEndOfDayUTC(kickoff).getTime(),
+    kickoff + 3 * 3600 * 1000
+  ));
   const source = obs.source || 'scraper';
   let seq = 0;
   const push = (ev) => {

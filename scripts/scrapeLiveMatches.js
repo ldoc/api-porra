@@ -41,14 +41,14 @@ function refreshCalendarIfNeeded(nowMs) {
   }
 }
 
-async function recordScrape({ startedMs, live, ok = 0, inserted = 0 }) {
+async function recordScrape({ startedMs, live, ok = 0, inserted = 0, healthy = true }) {
   const nowMs = Date.now();
   const log = buildScrapeLog({ startedMs, nowMs, live, ok, inserted });
   console.log(JSON.stringify(log));
   try {
     await GameConfig.updateOne(
       { _id: 'gameConfig' },
-      { $set: { lastScrapeAt: new Date(nowMs) } },
+      { $set: { lastScrapeAt: new Date(nowMs), lastScrapeOk: healthy } },
       { upsert: true }
     );
   } catch (e) {
@@ -58,7 +58,7 @@ async function recordScrape({ startedMs, live, ok = 0, inserted = 0 }) {
 
 async function tick() {
   const startedMs = Date.now();
-  const stats = { live: 0, ok: 0, inserted: 0 };
+  const stats = { live: 0, ok: 0, inserted: 0, attempted: 0, failed: 0, fatal: false };
   try {
     refreshCalendarIfNeeded(Date.now());
     const live = selectLiveMatches(calendar, Date.now());
@@ -90,6 +90,7 @@ async function tick() {
     let skipped = 0;
     for (const m of live) {
       if (finished.has(m.id)) continue;
+      stats.attempted++;
       try {
         const now = Date.now();
         const cachedLineups = lineupsCache.get(m.id);
@@ -150,6 +151,7 @@ async function tick() {
         const snapshotDoc = buildLiveDoc(m.id, matchStats, status, Date.now(), minute);
         pending.push({ match: m, snapshotDoc, hash, eventCount: nuevos.length });
       } catch (e) {
+        stats.failed++;
         console.error(`${stamp()} Fallo scrapeo ${m.id}: ${e.message}`);
       }
     }
@@ -161,6 +163,7 @@ async function tick() {
         stats.inserted = ops.length;
       } catch (e) {
         if (!isDuplicateWriteError(e)) {
+          stats.fatal = true;
           console.error(`${stamp()} Fallo bulkWrite de eventos: ${e.message}; snapshots y hashes no avanzan`);
           return;
         }
@@ -178,11 +181,16 @@ async function tick() {
         lastSnapshotHash.set(match.id, hash);
         stats.ok++;
       } catch (e) {
+        stats.failed++;
         console.error(`${stamp()} Fallo snapshot ${match.id}: ${e.message}`);
       }
     }
+  } catch (e) {
+    stats.fatal = true;
+    throw e;
   } finally {
-    await recordScrape({ startedMs, ...stats });
+    const healthy = !stats.fatal && !(stats.attempted > 0 && stats.failed >= stats.attempted);
+    await recordScrape({ startedMs, ...stats, healthy });
   }
 }
 

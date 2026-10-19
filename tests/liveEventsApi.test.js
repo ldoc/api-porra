@@ -144,8 +144,31 @@ test('buildScrapeLog normaliza contadores y ms', () => {
 });
 
 test('buildLiveHealth expone solo ok y lastScrapeAt', () => {
-  assert.deepEqual(buildLiveHealth(null), { ok: true, lastScrapeAt: null });
-  const d = new Date('2026-09-16T20:00:00Z');
-  assert.deepEqual(buildLiveHealth(d), { ok: true, lastScrapeAt: '2026-09-16T20:00:00.000Z' });
-  assert.deepEqual(buildLiveHealth(new Date('invalid')), { ok: true, lastScrapeAt: null });
+  const now = Date.parse('2026-09-16T20:00:00Z');
+  assert.deepEqual(buildLiveHealth(null, true, now), { ok: false, lastScrapeAt: null });
+  assert.deepEqual(buildLiveHealth(new Date('invalid'), true, now), { ok: false, lastScrapeAt: null });
+  const fresh = new Date('2026-09-16T19:59:30Z');
+  assert.deepEqual(buildLiveHealth(fresh, true, now), {
+    ok: true,
+    lastScrapeAt: '2026-09-16T19:59:30.000Z'
+  });
+});
+
+test('buildLiveHealth marca stale pasado el umbral', () => {
+  const now = Date.parse('2026-09-16T20:00:00Z');
+  const edge = new Date(now - 90000);
+  assert.equal(buildLiveHealth(edge, true, now).ok, true);
+  assert.equal(buildLiveHealth(new Date(now - 90001), true, now).ok, false);
+});
+
+test('buildLiveHealth respeta lastScrapeOk', () => {
+  const now = Date.parse('2026-09-16T20:00:00Z');
+  const fresh = new Date(now - 1000);
+  assert.equal(buildLiveHealth(fresh, false, now).ok, false);
+  assert.equal(buildLiveHealth(fresh, true, now).ok, true);
+});
+
+test('buildLiveHealth ok tras un tick sin partidos en ventana', () => {
+  const now = Date.parse('2026-09-16T20:00:00Z');
+  assert.equal(buildLiveHealth(new Date(now - 1000), true, now).ok, true);
 });

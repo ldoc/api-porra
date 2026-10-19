@@ -3,6 +3,7 @@ import 'dotenv/config';
 import mongoose from 'mongoose';
 import { connectDB } from '../db/index.js';
 import LiveEvent from '../db/models/LiveEvent.js';
+import { duplicateIndexAbortMessage } from './liveIndexes.js';
 
 await connectDB();
 try {
@@ -13,12 +14,9 @@ try {
     { $limit: 20 }
   ]).toArray();
 
-  if (duplicates.length) {
-    console.error('ABORTADO: existen documentos duplicados por {eventId, sourceId} en liveevents.');
-    for (const d of duplicates) {
-      console.error(`  eventId=${d._id.eventId} sourceId=${d._id.sourceId} documentos=${d.count}`);
-    }
-    console.error('Elimina los duplicados y vuelve a ejecutar este script. No se han tocado los índices.');
+  const abortMessage = duplicateIndexAbortMessage(duplicates);
+  if (abortMessage) {
+    console.error(abortMessage);
     process.exitCode = 1;
   } else {
     await LiveEvent.syncIndexes();
