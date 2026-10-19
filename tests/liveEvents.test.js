@@ -301,6 +301,46 @@ test('el score reconcilia despues de un gol en el 90+5', () => {
   assert.deepEqual(foldScore(evs), { home: 2, away: 0 });
 });
 
+test('el score se reemite si hay un gol posterior a la ultima correccion', () => {
+  const kickoffMs = Date.parse('2026-09-16T20:00:00Z');
+  const existingScore = { sourceId: 'score|1-0|prev', type: 'score', seq: 0,
+    ts: new Date(kickoffMs + 30 * 60000), payload: { scoreHome: 1, scoreAway: 0 } };
+  const existingGoal = { sourceId: 'goal|g2', type: 'goal', seq: 0, teamId: 1, minute: 55,
+    ts: new Date(kickoffMs + 55 * 60000), payload: { isHome: true } };
+  const o = obs({ kickoffMs, status: 'LIVE', period: 'period2', minute: 90,
+    starters: [], score: { home: 1, away: 0 } });
+  const evs = deriveEvents(o, [existingScore, existingGoal], NOW);
+  const s = evs.find(e => e.type === 'score');
+  assert.ok(s);
+  assert.deepEqual(s.payload, { scoreHome: 1, scoreAway: 0 });
+});
+
+test('el score queda despues de un gol existente posterior a nowMs', () => {
+  const kickoffMs = Date.parse('2026-09-16T20:00:00Z');
+  const existingGoal = { sourceId: 'goal|gf', type: 'goal', seq: 0, teamId: 1, minute: 90,
+    ts: new Date(kickoffMs + 105 * 60000), payload: { isHome: true } };
+  const o = obs({ kickoffMs, status: 'LIVE', period: 'period2', minute: 90,
+    starters: [], score: { home: 0, away: 0 } });
+  const evs = deriveEvents(o, [existingGoal], NOW);
+  const s = evs.find(e => e.type === 'score');
+  assert.ok(s);
+  assert.ok(new Date(s.ts).getTime() > new Date(existingGoal.ts).getTime());
+});
+
+test('el score emitido queda ultimo por (ts, seq) frente a assist y rating', () => {
+  const kickoffMs = Date.parse('2026-09-16T20:00:00Z');
+  const o = obs({ kickoffMs, score: { home: 2, away: 0 }, assists: { 12: 1 }, ratings: { 11: 7.0 },
+    incidents: [
+      { sourceId: 'g', type: 'goal', class: 'regular', time: 22, isHome: true, playerId: 11, homeScore: 1, awayScore: 0, teamId: 1 }
+    ] });
+  const evs = deriveEvents(o, [], NOW);
+  const s = evs.find(e => e.type === 'score');
+  assert.ok(s);
+  const sorted = [...evs].sort((a, b) =>
+    (new Date(a.ts).getTime() - new Date(b.ts).getTime()) || ((a.seq || 0) - (b.seq || 0)));
+  assert.equal(sorted[sorted.length - 1].type, 'score');
+});
+
 test('findGoalToCancel devuelve null si falta teamId o time', () => {
   const goal = { sourceId: 'goal|g1', type: 'goal', teamId: 1, minute: 40,
     payload: { isHome: true } };

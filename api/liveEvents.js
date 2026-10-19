@@ -157,12 +157,25 @@ export function deriveEvents(obs, existing = [], nowMs = Date.now()) {
   const lastScoreMatches = !!lastScore && !!obs.score &&
     Number(lastScore.payload?.scoreHome) === Number(obs.score.home) &&
     Number(lastScore.payload?.scoreAway) === Number(obs.score.away);
-  const tickHasGoal = out.some(e => e.type === 'goal' || e.type === 'own_goal' || e.type === 'goal_cancelled');
-  if (obs.score && (after.home !== obs.score.home || after.away !== obs.score.away) &&
-      (!lastScoreMatches || tickHasGoal)) {
-    const lastOutTs = out.reduce((m, e) => Math.max(m, new Date(e.ts).getTime()), -Infinity);
-    push({ sourceId: `score|${obs.score.home}-${obs.score.away}|${rev()}`, type: 'score', minute: obs.minute ?? null,
-      ts: new Date(Math.max(nowMs, lastOutTs + 1000)),
+
+  // ¿Sigue siendo válida la última corrección? Solo si no hay goles/anulaciones
+  // posteriores a ella (ni en existing ni en este tick).
+  const lastScoreOrder = lastScore
+    ? [new Date(lastScore.ts).getTime(), lastScore.seq || 0]
+    : null;
+  const laterGoal = [...existing, ...out].some(e => {
+    if (!['goal', 'own_goal', 'goal_cancelled'].includes(e.type)) return false;
+    if (!lastScoreOrder) return true;
+    const o = [new Date(e.ts).getTime(), e.seq || 0];
+    return o[0] > lastScoreOrder[0] || (o[0] === lastScoreOrder[0] && o[1] > lastScoreOrder[1]);
+  });
+  const scoreStillValid = lastScoreMatches && !laterGoal;
+
+  if (obs.score && (after.home !== obs.score.home || after.away !== obs.score.away) && !scoreStillValid) {
+    const maxTs = [...existing, ...out].reduce(
+      (m, e) => Math.max(m, new Date(e.ts).getTime() || 0), nowMs);
+    push({ sourceId: `score|${obs.score.home}-${obs.score.away}|${rev()}`, type: 'score',
+      minute: obs.minute ?? null, ts: new Date(maxTs + 1000),
       payload: { scoreHome: obs.score.home, scoreAway: obs.score.away } });
   }
 
