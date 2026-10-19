@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildLiveEventsResponse, liveEventsQuery, maxIngestedAt, liveEventsVersion, shouldReturn304, buildScrapeLog, buildLiveHealth } from '../api/live.js';
+import { buildLiveEventsResponse, buildLiveEventsPage, liveEventsQuery, maxIngestedAt, liveEventsVersion, shouldReturn304, buildScrapeLog, buildLiveHealth } from '../api/live.js';
+import { resolveLiveEventsRequest, loadLiveEventsPage } from '../api/liveEventsEndpoint.js';
 import { computeWeakEtag, etagMatches } from '../api/etag.js';
 
 test('buildLiveEventsResponse ordena por ts y usa el serverTime recibido', () => {
@@ -38,33 +39,161 @@ test('serverTime usa el maximo de los docs devueltos (no el global)', () => {
   assert.equal(res.serverTime, '2026-09-16T20:03:00.000Z');
 });
 
-test('liveEventsQuery construye el filtro delta por ingestedAt', () => {
+test('liveEventsQuery construye el filtro delta por ingestedAt con $gte', () => {
   assert.deepEqual(liveEventsQuery(null), {});
   const since = new Date('2026-09-16T20:00:00Z');
-  assert.deepEqual(liveEventsQuery(since), { ingestedAt: { $gt: since } });
+  assert.deepEqual(liveEventsQuery(since), { ingestedAt: { $gte: since } });
 });
 
 test('liveEventsQuery excluye sim por defecto', () => {
   assert.deepEqual(liveEventsQuery(null, { excludeSim: true }), { source: { $ne: 'sim' } });
   const since = new Date('2026-09-16T20:00:00Z');
   assert.deepEqual(liveEventsQuery(since, { excludeSim: true }), {
-    ingestedAt: { $gt: since },
+    ingestedAt: { $gte: since },
     source: { $ne: 'sim' }
   });
 });
 
-test('delta por ingestedAt excluye el cursor y toma serverTime = max(ingestedAt)', () => {
+test('delta $gte incluye eventos insertados en el mismo milisegundo que el cursor', () => {
   const since = new Date('2026-09-16T20:00:00Z');
   const docs = [
+    { _id: 'boundary', ingestedAt: new Date('2026-09-16T20:00:00Z') },
     { _id: 'old', ingestedAt: new Date('2026-09-16T19:59:00Z') },
-    { _id: 'n1', ingestedAt: new Date('2026-09-16T20:01:00Z') },
-    { _id: 'n2', ingestedAt: new Date('2026-09-16T20:00:00Z') }
+    { _id: 'n1', ingestedAt: new Date('2026-09-16T20:01:00Z') }
   ];
   const filter = liveEventsQuery(since);
-  const delta = docs.filter(d => d.ingestedAt > filter.ingestedAt.$gt);
-  assert.deepEqual(delta.map(d => d._id), ['n1']);
+  const delta = docs.filter(d => d.ingestedAt >= filter.ingestedAt.$gte);
+  assert.deepEqual(delta.map(d => d._id), ['boundary', 'n1']);
   const serverTime = delta.reduce((max, d) => (d.ingestedAt > max ? d.ingestedAt : max), new Date(0));
   assert.equal(serverTime.toISOString(), '2026-09-16T20:01:00.000Z');
+});
+
+test('buildLiveEventsPage full no trunca y conserva ingestedAt', () => {
+  const docs = Array.from({ length: 3 }, (_, i) => ({
+    eventId: 1,
+    ts: new Date(`2026-09-16T20:0${i}:00Z`),
+    ingestedAt: new Date(`2026-09-16T20:0${i + 1}:00Z`),
+    seq: i,
+    sourceId: `e${i}`
+  }));
+  const page = buildLiveEventsPage({ docs, since: null, limit: null });
+  assert.equal(page.resync, false);
+  assert.equal(page.data.events.length, 3);
+  assert.ok(page.data.events.every(e => e.ingestedAt instanceof Date));
+  assert.equal(page.data.serverTime, '2026-09-16T20:03:00.000Z');
+});
+
+test('buildLiveEventsPage delta limitado marca resync si hay mas eventos', () => {
+  const docs = Array.from({ length: 3 }, (_, i) => ({
+    eventId: 1,
+    ts: new Date(`2026-09-16T20:0${i}:00Z`),
+    ingestedAt: new Date(`2026-09-16T20:0${i}:00Z`),
+    seq: i,
+    sourceId: `e${i}`
+  }));
+  const page = buildLiveEventsPage({ docs, since: new Date('2026-09-16T19:00:00Z'), limit: 2 });
+  assert.equal(page.resync, true);
+  assert.equal(page.data.resync, true);
+  assert.deepEqual(page.data.events.map(e => e.sourceId), ['e0', 'e1']);
+});
+
+test('buildLiveEventsPage delta sin truncar no marca resync', () => {
+  const docs = [
+    { ts: new Date('2026-09-16T20:01:00Z'), ingestedAt: new Date('2026-09-16T20:01:00Z'), seq: 0, sourceId: 'a' },
+    { ts: new Date('2026-09-16T20:02:00Z'), ingestedAt: new Date('2026-09-16T20:02:00Z'), seq: 0, sourceId: 'b' }
+  ];
+  const page = buildLiveEventsPage({ docs, since: new Date('2026-09-16T19:00:00Z'), limit: 2 });
+  assert.equal(page.resync, false);
+  assert.equal(page.data.events.length, 2);
+});
+
+test('buildLiveEventsPage sin docs mantiene el cursor since', () => {
+  const page = buildLiveEventsPage({ docs: [], since: new Date('2026-09-16T20:00:00Z') });
+  assert.equal(page.data.serverTime, '2026-09-16T20:00:00.000Z');
+  assert.deepEqual(page.data.events, []);
+});
+
+test('resolveLiveEventsRequest marca resync para since futuro o invalido', () => {
+  const nowMs = Date.parse('2026-09-16T20:00:00Z');
+  assert.deepEqual(
+    resolveLiveEventsRequest({ sinceRaw: '2026-09-16T20:05:00Z', nowMs }),
+    { sinceDate: null, full: true, resync: true, future: true }
+  );
+  assert.deepEqual(
+    resolveLiveEventsRequest({ sinceRaw: 'no-es-una-fecha', nowMs }),
+    { sinceDate: null, full: true, resync: true, invalid: true }
+  );
+  const ok = resolveLiveEventsRequest({ sinceRaw: '2026-09-16T19:00:00Z', nowMs });
+  assert.equal(ok.resync, false);
+  assert.equal(ok.full, false);
+});
+
+function fakeLiveEventModel(docs, calls) {
+  return {
+    find(filter, projection) {
+      calls.filter = filter;
+      calls.projection = projection;
+      const query = {
+        sort(spec) { calls.sort = spec; return query; },
+        limit(n) { calls.limit = n; return query; },
+        async lean() { return docs; }
+      };
+      return query;
+    }
+  };
+}
+
+test('loadLiveEventsPage full consulta sin limite y proyecta sin _id/expireAt', async () => {
+  const calls = {};
+  const docs = [{ ts: new Date('2026-09-16T20:01:00Z'), ingestedAt: new Date('2026-09-16T20:01:00Z') }];
+  const page = await loadLiveEventsPage({
+    LiveEvent: fakeLiveEventModel(docs, calls),
+    nowMs: Date.parse('2026-09-16T20:02:00Z')
+  });
+  assert.deepEqual(calls.filter.expireAt.$gt, new Date('2026-09-16T20:02:00Z'));
+  assert.equal(calls.limit, undefined);
+  assert.equal(calls.projection, '-_id -expireAt');
+  assert.deepEqual(calls.sort, { ingestedAt: 1, seq: 1, _id: 1 });
+  assert.equal(page.data.events.length, 1);
+});
+
+test('loadLiveEventsPage delta consulta limit+1 y filtra eventId', async () => {
+  const calls = {};
+  const docs = [{ ts: new Date('2026-09-16T20:01:00Z'), ingestedAt: new Date('2026-09-16T20:01:00Z') }];
+  await loadLiveEventsPage({
+    LiveEvent: fakeLiveEventModel(docs, calls),
+    sinceRaw: '2026-09-16T19:00:00Z',
+    eventId: 42,
+    nowMs: Date.parse('2026-09-16T20:02:00Z'),
+    limit: 10
+  });
+  assert.equal(calls.filter.eventId, 42);
+  assert.equal(calls.limit, 11);
+});
+
+test('loadLiveEventsPage since invalido hace full y resync', async () => {
+  const calls = {};
+  const docs = [{ ts: new Date('2026-09-16T20:01:00Z'), ingestedAt: new Date('2026-09-16T20:01:00Z') }];
+  const page = await loadLiveEventsPage({
+    LiveEvent: fakeLiveEventModel(docs, calls),
+    sinceRaw: 'no-es-una-fecha',
+    nowMs: Date.parse('2026-09-16T20:02:00Z')
+  });
+  assert.equal(calls.limit, undefined);
+  assert.equal(page.resync, true);
+});
+
+test('loadLiveEventsPage since futuro hace full y resync', async () => {
+  const calls = {};
+  const docs = [{ ts: new Date('2026-09-16T20:01:00Z'), ingestedAt: new Date('2026-09-16T20:01:00Z') }];
+  const page = await loadLiveEventsPage({
+    LiveEvent: fakeLiveEventModel(docs, calls),
+    sinceRaw: '2026-09-16T21:00:00Z',
+    nowMs: Date.parse('2026-09-16T20:02:00Z')
+  });
+  assert.equal(calls.limit, undefined);
+  assert.equal(page.resync, true);
+  assert.equal(page.data.resync, true);
 });
 
 test('GET /api/live/events: mismo cuerpo+serverTime => ETag estable => 304', () => {

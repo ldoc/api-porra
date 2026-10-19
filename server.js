@@ -20,7 +20,8 @@ import { computeWeakEtag, etagMatches } from './api/etag.js';
 import { parseSinceParam } from './api/matchStatsFilter.js';
 import { calculateUserStandings, getLigaMatchIds, getMatchFaseMap } from './api/standings.js';
 import { guestReadFilter, canSeeGuests, bypassesGameLocks, guestEditingEnabled } from './api/guest.js';
-import { getLiveRefreshSecs, buildLiveResponse, buildLiveEventsResponse, liveEventsQuery, maxIngestedAt, liveEventsVersion, shouldReturn304, buildLiveHealth } from './api/live.js';
+import { getLiveRefreshSecs, buildLiveResponse, liveEventsVersion, shouldReturn304, buildLiveHealth } from './api/live.js';
+import { loadLiveEventsPage, resolveLiveEventsRequest } from './api/liveEventsEndpoint.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -148,7 +149,7 @@ const FASES_VALIDAS = fasesData.fases.map(f => f.nombre);
 
 function setCorsHeaders(req, res) {
   const origin = req.headers['origin'];
-  if (isAllowedOrigin(origin)) {
+  if (isAllowedOrigin(origin, FRONTEND_URL)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
   } else {
     res.setHeader('Access-Control-Allow-Origin', FRONTEND_URL);
@@ -1303,18 +1304,27 @@ const server = http.createServer(async (req, res) => {
     const phaseCheck = await checkPhaseConsistency(req, res);
     if (!phaseCheck) return;
     try {
-      const sinceResult = parseSinceParam(reqUrl.searchParams.get('since'));
-      if (!sinceResult.ok) {
-        sendJson(req, res, 400, { ok: false, error: 'Parámetro since inválido' });
-        return;
+      const eventIdRaw = reqUrl.searchParams.get('eventId');
+      let eventId = null;
+      if (eventIdRaw != null) {
+        if (!/^\d+$/.test(eventIdRaw) || Number(eventIdRaw) <= 0) {
+          sendJson(req, res, 400, { ok: false, error: 'Parámetro eventId inválido' });
+          return;
+        }
+        eventId = Number(eventIdRaw);
       }
+
+      const sinceRaw = reqUrl.searchParams.get('since');
+      const decision = resolveLiveEventsRequest({ sinceRaw });
       const wantSim = process.env.NODE_ENV !== 'production' && reqUrl.searchParams.get('source') === 'sim';
       const sourceFilter = wantSim ? { source: 'sim' } : { source: { $ne: 'sim' } };
-      const sourceKey = wantSim ? 'sim' : 'default';
-      const sinceKey = sinceResult.date ? sinceResult.date.toISOString() : '';
+      if (eventId != null) sourceFilter.eventId = eventId;
+      const sourceKey = `${wantSim ? 'sim' : 'default'}:${eventId ?? ''}`;
+      const sinceKey = decision.resync ? '__resync__'
+        : (decision.full ? '' : decision.sinceDate.toISOString());
       const version = await currentLiveVersion(sourceFilter);
 
-      if (!sinceResult.date) {
+      if (decision.full) {
         const rate = liveNoSinceLimiter(req);
         if (!rate.ok) {
           sendJson(req, res, rate.status, { ok: false, error: rate.error });
@@ -1337,22 +1347,18 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
-      const filter = liveEventsQuery(sinceResult.date, { excludeSim: !wantSim });
-      if (wantSim) filter.source = 'sim';
-      filter.expireAt = { $gt: new Date() };
-      const docs = await LiveEvent.find(filter, '-_id -expireAt')
-        .sort({ ingestedAt: 1, seq: 1 }).limit(5000).lean();
-      const max = maxIngestedAt(docs);
-      const serverTime = docs.length ? new Date(max).toISOString()
-        : (sinceResult.date ? sinceResult.date.toISOString() : null);
-      const data = buildLiveEventsResponse(
-        docs.map(({ ingestedAt, ...rest }) => rest),
-        serverTime
-      );
+      const page = await loadLiveEventsPage({
+        LiveEvent,
+        sinceRaw,
+        eventId,
+        source: wantSim ? 'sim' : 'default'
+      });
+      const data = page.data;
       const json = JSON.stringify(data);
       liveBodyCache = { source: sourceKey, version, since: sinceKey, etag: computeWeakEtag(json) };
       sendJson(req, res, 200, data, 28);
     } catch (e) {
+      console.error('Error obteniendo eventos live:', e);
       sendJson(req, res, 500, { ok: false, error: 'Error al obtener eventos live' });
     }
     return;

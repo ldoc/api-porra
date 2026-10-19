@@ -64,6 +64,23 @@ export function maxIngestedAt(docs) {
   }, 0);
 }
 
+function timestampOf(value) {
+  const t = value ? new Date(value).getTime() : 0;
+  return Number.isFinite(t) ? t : 0;
+}
+
+export function compareLiveEvents(a, b) {
+  const byTs = timestampOf(a?.ts) - timestampOf(b?.ts);
+  if (byTs) return byTs;
+  const bySeq = (a?.seq || 0) - (b?.seq || 0);
+  if (bySeq) return bySeq;
+  const byIngested = timestampOf(a?.ingestedAt) - timestampOf(b?.ingestedAt);
+  if (byIngested) return byIngested;
+  return String(a?.sourceId || '').localeCompare(String(b?.sourceId || ''));
+}
+
+export const LIVE_EVENTS_DELTA_LIMIT = 5000;
+
 export function liveEventsVersion(docs) {
   return new Date(maxIngestedAt(docs) || 0).toISOString();
 }
@@ -79,15 +96,36 @@ export function shouldReturn304({ cached, version, since, source = '', ifNoneMat
 }
 
 export function buildLiveEventsResponse(docs, serverTime = null, resync = false) {
-  const events = [...(docs || [])].sort((a, b) => {
-    const t = new Date(a.ts).getTime() - new Date(b.ts).getTime();
-    return t || ((a.seq || 0) - (b.seq || 0));
-  });
+  const events = [...(docs || [])].sort(compareLiveEvents);
   return { ok: true, events, serverTime: serverTime ?? null, resync: !!resync };
 }
 
+/**
+ * Decide the full/delta page returned by GET /api/live/events.
+ * A full load is authoritative and never truncated. Deltas are capped: callers
+ * must fetch `limit + 1` docs so that `docs.length > limit` really means there
+ * are more events waiting, and the client is asked to resync.
+ */
+export function buildLiveEventsPage({ docs = [], since = null, limit = null, resync = false } = {}) {
+  const sorted = [...(docs || [])].sort(compareLiveEvents);
+  const cap = Number.isInteger(limit) && limit > 0 ? limit : null;
+  const truncated = cap !== null && sorted.length > cap;
+  const events = truncated ? sorted.slice(0, cap) : sorted;
+  const max = maxIngestedAt(events);
+  const serverTime = events.length
+    ? new Date(max).toISOString()
+    : (since ? new Date(since).toISOString() : null);
+  const shouldResync = !!resync || truncated;
+  return {
+    data: buildLiveEventsResponse(events, serverTime, shouldResync),
+    resync: shouldResync
+  };
+}
+
+// `$gte`: an event inserted in the same millisecond as the cursor is not lost.
+// The client deduplicates by `eventId|sourceId`.
 export function liveEventsQuery(sinceDate, { excludeSim = false } = {}) {
-  const filter = sinceDate ? { ingestedAt: { $gt: sinceDate } } : {};
+  const filter = sinceDate ? { ingestedAt: { $gte: sinceDate } } : {};
   if (excludeSim) filter.source = { $ne: 'sim' };
   return filter;
 }
