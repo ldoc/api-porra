@@ -442,7 +442,7 @@ test('assist same-ts A→B→A elige el maximo por ingestedAt aunque el array ve
   assert.equal(c.find(e => e.type === 'assist').payload.asistencias, 1);
 });
 
-test('own goal y su anulacion dejan el marcador a cero', () => {
+test('own goal acredita al equipo contrario y su anulacion lo revierte', () => {
   const o = obs({ score: { home: 0, away: 0 }, incidents: [
     { sourceId: 'og', type: 'goal', class: 'ownGoal', time: 20, isHome: true, playerId: 11, homeScore: 0, awayScore: 1, teamId: 1 },
     { sourceId: 'v', type: 'goal_cancelled', class: 'goalDisallowed', time: 21, teamId: 1, playerId: 11 }
@@ -450,7 +450,10 @@ test('own goal y su anulacion dejan el marcador a cero', () => {
   const evs = deriveEvents(o, [], NOW);
   const goal = evs.find(e => e.type === 'goal');
   assert.equal(goal.payload.isOwnGoal, true);
+  assert.equal(goal.payload.isHome, true);
+  assert.deepEqual(foldScore([goal]), { home: 0, away: 1 }, 'el gol en propia del local acredita al visitante');
+
   const cancel = evs.find(e => e.type === 'goal_cancelled');
   assert.equal(cancel.payload.ofSourceId, 'goal|og');
-  assert.deepEqual(foldScore(evs), { home: 0, away: 0 });
+  assert.deepEqual(foldScore([goal, cancel]), { home: 0, away: 0 });
 });

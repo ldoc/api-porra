@@ -40,16 +40,19 @@ export function foldScore(events) {
     return (TYPE_RANK[a.type] ?? 99) - (TYPE_RANK[b.type] ?? 99);
   });
   const byId = new Map(sorted.map(e => [e.sourceId, e]));
+  const goalSideIsHome = (goal) => goal.payload?.isOwnGoal
+    ? !goal.payload?.isHome
+    : !!goal.payload?.isHome;
   let home = 0, away = 0;
   for (const e of sorted) {
     if (e.type === 'goal') {
-      if (e.payload?.isHome) home++; else away++;
+      if (goalSideIsHome(e)) home++; else away++;
     } else if (e.type === 'score') {
       home = e.payload?.scoreHome ?? home;
       away = e.payload?.scoreAway ?? away;
     } else if (e.type === 'goal_cancelled') {
       const g = byId.get(e.payload?.ofSourceId);
-      if (g) { if (g.payload?.isHome) home--; else away--; }
+      if (g) { if (goalSideIsHome(g)) home--; else away--; }
     }
   }
   return { home: Math.max(0, home), away: Math.max(0, away) };
