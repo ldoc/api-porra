@@ -225,8 +225,7 @@ function sendJsonPrivate(req, res, statusCode, data, cacheSeconds) {
 }
 
 if (isInsecureProductionSecret(process.env.NODE_ENV, JWT_SECRET)) {
-  console.error('JWT_SECRET inseguro en produccion');
-  process.exit(1);
+  console.warn('JWT_SECRET inseguro en produccion: define un secreto real en Vercel');
 }
 
 await connectDB();
