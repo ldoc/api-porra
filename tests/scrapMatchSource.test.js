@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeIncidents, buildAssistsMap } from '../scripts/matchStats.js';
+import { normalizeIncidents, buildAssistsMap, sentOffPlayerIds } from '../scripts/matchStats.js';
 
 test('normalizeIncidents mapea goal, penalty, card, sub, var', () => {
   const raw = { incidents: [
@@ -42,4 +42,31 @@ test('buildAssistsMap extrae asistencias por jugador', () => {
     { playerId: 12, statistics: [{ key: 'goals', value: '1' }] }
   ] };
   assert.deepEqual(buildAssistsMap(data), { 11: 2 });
+});
+
+test('sentOffPlayerIds detecta roja y doble amarilla e ignora amarilla', () => {
+  const raw = { incidents: [
+    { incidentType: 'card', incidentClass: 'red', player: { id: 11 } },
+    { incidentType: 'card', incidentClass: 'yellowRed', player: { id: 12 } },
+    { incidentType: 'card', incidentClass: 'yellow', player: { id: 13 } }
+  ] };
+  const out = sentOffPlayerIds(raw);
+  assert.deepEqual([...out].sort(), ['11', '12']);
+});
+
+test('sentOffPlayerIds ignora incidencias sin jugador o que no son tarjetas', () => {
+  const raw = { incidents: [
+    { incidentType: 'card', incidentClass: 'red' },
+    { incidentType: 'card', incidentClass: 'red', player: {} },
+    { incidentType: 'goal', incidentClass: 'red', player: { id: 14 } },
+    { incidentType: 'card', incidentClass: 'red', player: { id: 15 } }
+  ] };
+  assert.deepEqual([...sentOffPlayerIds(raw)], ['15']);
+});
+
+test('sentOffPlayerIds devuelve un set vacío con entrada nula o sin incidencias', () => {
+  assert.equal(sentOffPlayerIds(null).size, 0);
+  assert.equal(sentOffPlayerIds(undefined).size, 0);
+  assert.equal(sentOffPlayerIds({}).size, 0);
+  assert.equal(sentOffPlayerIds({ incidents: [] }).size, 0);
 });

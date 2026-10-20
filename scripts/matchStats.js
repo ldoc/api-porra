@@ -17,7 +17,8 @@ function processPlayer(playerEntry, teamId, assistsMap) {
         esSuplente: playerEntry.substitute || false,
         penaltiMarcado: 0,
         penaltiParado: 0,
-        asistencias: assistsMap[String(p.id)] || 0
+        asistencias: assistsMap[String(p.id)] || 0,
+        expulsado: false
     };
 }
 
@@ -33,6 +34,17 @@ export function penaltyIncidentIds(incidentsData) {
         if (isPenalty && incident.id != null) ids.add(String(incident.id));
     }
     return ids;
+}
+
+export function sentOffPlayerIds(incidentsData) {
+    const out = new Set();
+    for (const inc of incidentsData?.incidents || []) {
+        if (inc.incidentType !== 'card') continue;
+        if (inc.incidentClass !== 'red' && inc.incidentClass !== 'yellowRed') continue;
+        const id = inc.player?.id;
+        if (id != null) out.add(String(id));
+    }
+    return out;
 }
 
 async function fetchPlayerStatistics(eventId, playerId) {
@@ -235,11 +247,13 @@ export async function scrapMatchFull(eventId, raw = null) {
     await resolveGkPenalties({ eventId, goalkeepers, incidentsData });
 
     const { penaltiesScored, goalsByGoalkeeper } = processIncidents(incidentsData);
+    const sentOff = sentOffPlayerIds(incidentsData);
     const homeGoals = ev.homeScore?.display ?? 0;
     const awayGoals = ev.awayScore?.display ?? 0;
 
     for (const player of allPlayers) {
         player.penaltiMarcado = penaltiesScored[player.id] || 0;
+        player.expulsado = sentOff.has(String(player.id));
         if (player.posicion === 'G') {
             player.golesRecibidos = goalsByGoalkeeper[player.id] || 0;
         }
