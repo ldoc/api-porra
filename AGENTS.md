@@ -611,6 +611,10 @@ Por cada gol marcado en un partido el jugador recibirá 1 punto adicional. Depen
 
 En el caso de que el gol se marque de penalti el jugador no recibe esta puntuación adicional por demarcación.
 
+#### Puntuación por asistencias de gol
+
+Por cada asistencia de gol el jugador recibirá 1 punto adicional, independientemente de su demarcación.
+
 #### Porteros (penaltis parados y goles recibidos)
 
 Esta puntuación aplica solo a los porteros. Los porteros recibirán una puntuación adicional negativa de 1 punto (-1) por cada gol recibido. En el caso de que el portero pare un penalti recibirá una puntuación adicional positiva de 3 puntos (+3).
