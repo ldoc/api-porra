@@ -1,3 +1,5 @@
+import { etagMatches } from './etag.js';
+
 export const LIVE_REFRESH_DEFAULT = 60;
 const MATCH_DURATION_S = 2 * 3600;
 const PRE_WINDOW_S = 15 * 60;
@@ -53,4 +55,113 @@ export function buildLiveResponse(docs) {
     return t > acc ? t : acc;
   }, 0);
   return { ok: true, liveMatches, serverTime: max ? new Date(max).toISOString() : null };
+}
+
+export function maxIngestedAt(docs) {
+  return (docs || []).reduce((max, d) => {
+    const t = d.ingestedAt ? new Date(d.ingestedAt).getTime() : 0;
+    return t > max ? t : max;
+  }, 0);
+}
+
+function timestampOf(value) {
+  const t = value ? new Date(value).getTime() : 0;
+  return Number.isFinite(t) ? t : 0;
+}
+
+export function compareLiveEvents(a, b) {
+  const byTs = timestampOf(a?.ts) - timestampOf(b?.ts);
+  if (byTs) return byTs;
+  const bySeq = (a?.seq || 0) - (b?.seq || 0);
+  if (bySeq) return bySeq;
+  const byIngested = timestampOf(a?.ingestedAt) - timestampOf(b?.ingestedAt);
+  if (byIngested) return byIngested;
+  return String(a?.sourceId || '').localeCompare(String(b?.sourceId || ''));
+}
+
+export const LIVE_EVENTS_DELTA_LIMIT = 5000;
+
+function compareVersionDocs(a, b) {
+  const byIngested = timestampOf(a?.ingestedAt) - timestampOf(b?.ingestedAt);
+  if (byIngested) return byIngested;
+  return String(a?._id ?? '').localeCompare(String(b?._id ?? ''));
+}
+
+// Version must change for same-millisecond inserts too, hence the `_id`
+// tiebreaker (ObjectId is monotonic within a process/second).
+export function liveEventsVersion(docs) {
+  if (!docs?.length) return new Date(0).toISOString();
+  const last = [...docs].sort(compareVersionDocs).at(-1);
+  return `${new Date(timestampOf(last.ingestedAt)).toISOString()}|${last._id ?? ''}`;
+}
+
+export function shouldReturn304({ cached, version, since, source = '', ifNoneMatch }) {
+  return Boolean(
+    cached?.etag &&
+    cached.version === version &&
+    cached.since === since &&
+    (cached.source || '') === (source || '') &&
+    etagMatches(ifNoneMatch, cached.etag)
+  );
+}
+
+export function buildLiveEventsResponse(docs, serverTime = null, resync = false) {
+  const events = [...(docs || [])].sort(compareLiveEvents);
+  return { ok: true, events, serverTime: serverTime ?? null, resync: !!resync };
+}
+
+/**
+ * Decide the full/delta page returned by GET /api/live/events.
+ * A full load is authoritative and never truncated. Deltas are capped: callers
+ * must fetch `limit + 1` docs so that `docs.length > limit` really means there
+ * are more events waiting, and the client is asked to resync.
+ */
+export function buildLiveEventsPage({ docs = [], since = null, limit = null, resync = false } = {}) {
+  const sorted = [...(docs || [])].sort(compareLiveEvents);
+  const cap = Number.isInteger(limit) && limit > 0 ? limit : null;
+  const truncated = cap !== null && sorted.length > cap;
+  const events = truncated ? sorted.slice(0, cap) : sorted;
+  const max = maxIngestedAt(events);
+  const serverTime = events.length
+    ? new Date(max).toISOString()
+    : (since ? new Date(since).toISOString() : null);
+  const shouldResync = !!resync || truncated;
+  return {
+    data: buildLiveEventsResponse(events, serverTime, shouldResync),
+    resync: shouldResync
+  };
+}
+
+// `$gte`: an event inserted in the same millisecond as the cursor is not lost.
+// The client deduplicates by `eventId|sourceId`.
+export function liveEventsQuery(sinceDate, { excludeSim = false } = {}) {
+  const filter = sinceDate ? { ingestedAt: { $gte: sinceDate } } : {};
+  if (excludeSim) filter.source = { $ne: 'sim' };
+  return filter;
+}
+
+function nonNegativeInt(value) {
+  return Number.isFinite(value) && value > 0 ? Math.trunc(value) : 0;
+}
+
+export function buildScrapeLog({ startedMs, nowMs, live = 0, ok = 0, inserted = 0 } = {}) {
+  const at = Number.isFinite(nowMs) ? nowMs : Date.now();
+  const ms = Number.isFinite(startedMs) ? Math.max(0, at - startedMs) : 0;
+  return {
+    t: new Date(at).toISOString(),
+    live: nonNegativeInt(live),
+    ok: nonNegativeInt(ok),
+    inserted: nonNegativeInt(inserted),
+    ms
+  };
+}
+
+export function buildLiveHealth(lastScrapeAt, lastScrapeOk, nowMs = Date.now(), staleMs = 90000) {
+  const date = lastScrapeAt instanceof Date ? lastScrapeAt : new Date(lastScrapeAt);
+  const valid = lastScrapeAt != null && !Number.isNaN(date.getTime());
+  const fresh = valid && nowMs - date.getTime() <= staleMs;
+  return {
+    ok: valid && fresh && lastScrapeOk !== false,
+    lastScrapeAt: valid ? date.toISOString() : null
+  };
 }

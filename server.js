@@ -8,11 +8,11 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
-import { connectDB, User, Invitation, MatchStats, Message, LiveMatch } from './db/index.js';
+import { connectDB, User, Invitation, MatchStats, Message, LiveMatch, LiveEvent } from './db/index.js';
 import GameConfig from './db/models/GameConfig.js';
 import { register, login, getProfile, saveProfile, getTakenAvatars, getAllPlayers, getSquad, saveSquad, changePassword } from './api/auth.js';
 import { scrapMatchStats } from './scripts/matchStats.js';
-import { authenticate, rateLimiter, checkBodySize, setSecurityHeaders, validateUsername, authRateLimiter } from './api/middleware.js';
+import { authenticate, rateLimiter, checkBodySize, setSecurityHeaders, validateUsername, authRateLimiter, mergeVary, isAllowedOrigin, isInsecureProductionSecret, clientIp } from './api/middleware.js';
 import { getFinalPredictionsViolations } from './api/finalPredictions.js';
 import { validateFasesFechas } from './api/fasesFechas.js';
 import { validateMessage } from './api/messageValidation.js';
@@ -20,7 +20,8 @@ import { computeWeakEtag, etagMatches } from './api/etag.js';
 import { parseSinceParam } from './api/matchStatsFilter.js';
 import { calculateUserStandings, getLigaMatchIds, getMatchFaseMap } from './api/standings.js';
 import { guestReadFilter, canSeeGuests, bypassesGameLocks, guestEditingEnabled } from './api/guest.js';
-import { getLiveRefreshSecs, buildLiveResponse } from './api/live.js';
+import { getLiveRefreshSecs, buildLiveResponse, liveEventsVersion, shouldReturn304, buildLiveHealth } from './api/live.js';
+import { loadLiveEventsPage, resolveLiveEventsRequest } from './api/liveEventsEndpoint.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -33,6 +34,24 @@ const loginLimiter = rateLimiter({ windowMs: 15 * 60 * 1000, max: 10 });
 const registerLimiter = rateLimiter({ windowMs: 15 * 60 * 1000, max: 5 });
 const globalLimiter = rateLimiter({ windowMs: 60 * 1000, max: 120 });
 const authenticatedLimiter = authRateLimiter({ windowMs: 60 * 1000, max: 30 });
+const liveNoSinceLimiter = rateLimiter({ windowMs: 60 * 1000, max: 30, keyFn: clientIp });
+
+let liveVersionCache = { key: null, version: null, at: 0 };
+let liveBodyCache = { source: null, version: null, since: null, etag: null };
+
+async function currentLiveVersion(sourceFilter) {
+  const key = JSON.stringify(sourceFilter);
+  if (liveVersionCache.key === key && Date.now() - liveVersionCache.at < 2000) {
+    return liveVersionCache.version;
+  }
+  const last = await LiveEvent.findOne(
+    { ...sourceFilter, expireAt: { $gt: new Date() } },
+    { ingestedAt: 1, _id: 1 }
+  ).sort({ ingestedAt: -1, _id: -1 }).lean();
+  const version = last ? liveEventsVersion([last]) : null;
+  liveVersionCache = { key, version, at: Date.now() };
+  return version;
+}
 
 async function getFaseJuego() {
   try {
@@ -130,19 +149,15 @@ const FASES_VALIDAS = fasesData.fases.map(f => f.nombre);
 
 function setCorsHeaders(req, res) {
   const origin = req.headers['origin'];
-  const allowedOrigins = [
-    'https://porra-spa.vercel.app',
-    'http://localhost:5173',
-    'http://localhost:3000',
-    'http://localhost:8080'
-  ];
-  if (allowedOrigins.includes(origin) || (origin && origin.startsWith('http://localhost'))) {
+  if (isAllowedOrigin(origin, FRONTEND_URL)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
   } else {
     res.setHeader('Access-Control-Allow-Origin', FRONTEND_URL);
   }
+  mergeVary(res, 'Origin, Accept-Encoding');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Client-Phase');
+  res.setHeader('Access-Control-Expose-Headers', 'X-Server-Time, ETag');
 }
 
 function parseBody(req, maxSizeBytes = 1024 * 1024) {
@@ -202,11 +217,16 @@ function sendJson(req, res, statusCode, data, cacheSeconds) {
 }
 
 function sendJsonPrivate(req, res, statusCode, data, cacheSeconds) {
-  res.setHeader('Vary', 'Authorization');
+  mergeVary(res, 'Authorization');
   if (cacheSeconds) {
     res.setHeader('Cache-Control', `private, max-age=${cacheSeconds}, stale-while-revalidate=${cacheSeconds * 2}`);
   }
   sendJson(req, res, statusCode, data);
+}
+
+if (isInsecureProductionSecret(process.env.NODE_ENV, JWT_SECRET)) {
+  console.error('JWT_SECRET inseguro en produccion');
+  process.exit(1);
 }
 
 await connectDB();
@@ -232,7 +252,7 @@ const server = http.createServer(async (req, res) => {
   // Bloqueo por mantenimiento: si está activo, solo pasan admins y endpoints de lectura de config/login
   // Esto capa a usuarios que ya tenían la web abierta (sus siguientes fetch recibirán 503)
   try {
-    const maintenancePathsAllowlist = ['/api/config', '/api/auth/login', '/'];
+    const maintenancePathsAllowlist = ['/api/config', '/api/auth/login', '/api/live/health', '/'];
     const isMaintenanceBypassPath =
       maintenancePathsAllowlist.includes(reqUrl.pathname) ||
       reqUrl.pathname === '/api/admin/maintenance';
@@ -1263,6 +1283,108 @@ const server = http.createServer(async (req, res) => {
       const status = e.message === 'NOT_FOUND' ? 404 : 500;
       const error = e.message === 'NOT_FOUND' ? 'Partido no encontrado en Sofascore' : 'Error al obtener estadísticas del partido';
       sendJson(req, res, status, { ok: false, error });
+    }
+    return;
+  }
+
+  // Endpoint: salud del scraper live (sin datos internos)
+  if (reqUrl.pathname === '/api/live/health' && req.method === 'GET') {
+    try {
+      const config = await GameConfig.findById('gameConfig', 'lastScrapeAt lastScrapeOk').lean();
+      res.setHeader('Cache-Control', 'no-store');
+      sendJson(req, res, 200, buildLiveHealth(config?.lastScrapeAt, config?.lastScrapeOk));
+    } catch (e) {
+      console.error('Error obteniendo health live:', e);
+      sendJson(req, res, 500, { ok: false, lastScrapeAt: null });
+    }
+    return;
+  }
+
+  // Endpoint: eventos live (log) — full o delta
+  if (reqUrl.pathname === '/api/live/events' && req.method === 'GET') {
+    const phaseCheck = await checkPhaseConsistency(req, res);
+    if (!phaseCheck) return;
+    try {
+      const serverNow = new Date().toISOString();
+      const eventIdRaw = reqUrl.searchParams.get('eventId');
+      let eventId = null;
+      if (eventIdRaw != null) {
+        if (!/^\d+$/.test(eventIdRaw) || Number(eventIdRaw) <= 0) {
+          sendJson(req, res, 400, { ok: false, error: 'Parámetro eventId inválido' });
+          return;
+        }
+        eventId = Number(eventIdRaw);
+      }
+
+      const sinceRaw = reqUrl.searchParams.get('since');
+      const decision = resolveLiveEventsRequest({ sinceRaw });
+      const wantSim = process.env.NODE_ENV !== 'production' && reqUrl.searchParams.get('source') === 'sim';
+      const sourceFilter = wantSim ? { source: 'sim' } : { source: { $ne: 'sim' } };
+      if (eventId != null) sourceFilter.eventId = eventId;
+      const sourceKey = `${wantSim ? 'sim' : 'default'}:${eventId ?? ''}`;
+      const sinceKey = decision.resync ? '__resync__'
+        : (decision.full ? '' : decision.sinceDate.toISOString());
+      const version = await currentLiveVersion(sourceFilter);
+
+      if (decision.full) {
+        const rate = liveNoSinceLimiter(req);
+        if (!rate.ok) {
+          sendJson(req, res, rate.status, { ok: false, error: rate.error });
+          return;
+        }
+      }
+
+      if (shouldReturn304({
+        cached: liveBodyCache,
+        version,
+        since: sinceKey,
+        source: sourceKey,
+        ifNoneMatch: req.headers['if-none-match']
+      })) {
+        res.writeHead(304, {
+          ETag: liveBodyCache.etag,
+          'Cache-Control': 'public, max-age=28, stale-while-revalidate=56',
+          'X-Server-Time': serverNow
+        });
+        res.end();
+        return;
+      }
+
+      const page = await loadLiveEventsPage({
+        LiveEvent,
+        sinceRaw,
+        eventId,
+        source: wantSim ? 'sim' : 'default'
+      });
+      const data = page.data;
+      const json = JSON.stringify(data);
+      liveBodyCache = { source: sourceKey, version, since: sinceKey, etag: computeWeakEtag(json) };
+      res.setHeader('X-Server-Time', serverNow);
+      sendJson(req, res, 200, data, 28);
+    } catch (e) {
+      console.error('Error obteniendo eventos live:', e);
+      sendJson(req, res, 500, { ok: false, error: 'Error al obtener eventos live' });
+    }
+    return;
+  }
+
+  // Endpoint: eliminar eventos de un partido (admin)
+  if (reqUrl.pathname.startsWith('/api/live/events/') && req.method === 'DELETE') {
+    const eventId = parseInt(reqUrl.pathname.split('/api/live/events/')[1]);
+    if (isNaN(eventId)) {
+      sendJson(req, res, 400, { ok: false, error: 'eventId inválido' });
+      return;
+    }
+    const admin = await verifyAdmin(req);
+    if (!admin) {
+      sendJson(req, res, 403, { ok: false, error: 'Acceso denegado. Se requieren permisos de administrador.' });
+      return;
+    }
+    try {
+      const result = await LiveEvent.deleteMany({ eventId });
+      sendJson(req, res, 200, { ok: true, deleted: eventId, count: result.deletedCount });
+    } catch (e) {
+      sendJson(req, res, 500, { ok: false, error: 'Error al eliminar eventos live' });
     }
     return;
   }

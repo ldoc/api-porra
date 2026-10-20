@@ -147,9 +147,33 @@ export async function getAllPlayers(filter = {}) {
   }));
 }
 
+function isSingleEmoji(value) {
+  if (!value) return false;
+  if (typeof Intl?.Segmenter === 'function') {
+    const graphemes = [...new Intl.Segmenter('en', { granularity: 'grapheme' }).segment(value)];
+    if (graphemes.length !== 1) return false;
+  } else if ([...value].length > 2) {
+    return false;
+  }
+  return /\p{Extended_Pictographic}|\p{Regional_Indicator}/u.test(value);
+}
+
+export function isValidAvatar(value) {
+  if (typeof value !== 'string') return false;
+  const v = value.trim();
+  if (!v || v.length > 200) return false;
+  if (/[<>&"'`]/.test(v)) return false;
+  if (/^https:\/\/\S+$/i.test(v)) return true;
+  return isSingleEmoji(v);
+}
+
 export async function saveProfile(username, profileData) {
   if (!username) {
     return { ok: false, error: 'Usuario requerido' };
+  }
+
+  if (profileData.avatar != null && !isValidAvatar(profileData.avatar)) {
+    return { ok: false, error: 'Avatar inválido' };
   }
 
   const user = await User.findOne({ username: username.toLowerCase() });
@@ -157,7 +181,9 @@ export async function saveProfile(username, profileData) {
     return { ok: false, error: 'Usuario no encontrado' };
   }
 
-  user.avatar = profileData.avatar || user.avatar;
+  if (profileData.avatar != null) {
+    user.avatar = profileData.avatar.trim();
+  }
   await user.save();
 
   return {

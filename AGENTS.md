@@ -146,6 +146,14 @@ api-porra/
 | GET    | `/api/match-stats/updated`    | Contador de matchstats y última actualización  |
 | DELETE | `/api/match-stats/:eventId`   | Eliminar un matchstat por eventId              |
 
+### Eventos Live (log)
+
+| Método | Ruta                          | Descripción                                    |
+|--------|-------------------------------|------------------------------------------------|
+| GET    | `/api/live/events`            | Eventos de la jornada (colección `liveevents`). `?since=<ISO>` → delta por `ingestedAt`; añade `serverTime`. `since` malformado → 400 |
+| GET    | `/api/live`                   | Snapshots `livematches` (respaldo).            |
+| DELETE | `/api/live/events/:eventId`   | (admin) borra eventos de un partido.           |
+
 ### Legacy (compatibilidad)
 
 | Método | Ruta | Descripción                                    |
@@ -603,6 +611,10 @@ Por cada gol marcado en un partido el jugador recibirá 1 punto adicional. Depen
 
 En el caso de que el gol se marque de penalti el jugador no recibe esta puntuación adicional por demarcación.
 
+#### Puntuación por asistencias de gol
+
+Por cada asistencia de gol el jugador recibirá 1 punto adicional, independientemente de su demarcación.
+
 #### Porteros (penaltis parados y goles recibidos)
 
 Esta puntuación aplica solo a los porteros. Los porteros recibirán una puntuación adicional negativa de 1 punto (-1) por cada gol recibido. En el caso de que el portero pare un penalti recibirá una puntuación adicional positiva de 3 puntos (+3).
@@ -681,3 +693,8 @@ Los usuarios predicen el cuadro completo de eliminatorias de la Champions League
 
 - Los scripts de scraping (`scripts/`) usan headers de Chrome para evitar bloqueos de Sofascore.
 - **Scrapeo live periódico (local)**: `node --env-file=.env scripts/scrapeLiveMatches.js` rellena la colección `livematches` cada 30s (ventana `[inicio−15min, inicio+120min]`). Corre en local y escribe en Mongo; usar el `MONGODB_URI` de `/prod` para que lo vea `porra-spa` en producción. `--once` hace una sola pasada. `Ctrl+C` lo para. El TTL de Mongo borra los docs a fin de día UTC. Los partidos en ventana pero sin empezar se guardan con `status: 'NS'` (Sofascore `notstarted`/`willsoonstart`); el frontend los muestra como "⏳ SIN EMPEZAR".
+- **Eventos live explicados**: `scripts/scrapeLiveMatches.js` también deriva eventos
+  (`api/liveEvents.js:deriveEvents`) desde `scrapMatchSource` y los inserta de forma
+  idempotente (índice único `{eventId,sourceId}`) en `liveevents` (TTL fin de día UTC).
+  Tipos: `lineup|status|goal|goal_cancelled|assist|penalty_saved|penalty_missed|card|substitution|rating|score|match_final`.
+  Tras desplegar, crear índices con `node --env-file=.env scripts/ensureLiveEventsIndexes.js`.
