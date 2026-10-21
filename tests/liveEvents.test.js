@@ -191,6 +191,20 @@ test('deriveEvents anula el gol referenciado', () => {
   assert.equal(cancel.payload.ofSourceId, 'goal|g1');
 });
 
+test('findGoalToCancel prioriza el jugador del incidente', () => {
+  const g1 = { sourceId: 'goal|g1', type: 'goal', teamId: 1, playerId: 11, minute: 18,
+    payload: { scorerId: 11, isHome: true } };
+  const g2 = { sourceId: 'goal|g2', type: 'goal', teamId: 1, playerId: 12, minute: 22,
+    payload: { scorerId: 12, isHome: true } };
+  const o = obs({ score: { home: 0, away: 0 }, incidents: [
+    { sourceId: 'v1', type: 'goal_cancelled', class: 'goalDisallowed', time: 20,
+      isHome: true, playerId: 11, teamId: 1 }
+  ] });
+  const cancel = deriveEvents(o, [g1, g2], NOW).find(e => e.type === 'goal_cancelled');
+  assert.ok(cancel);
+  assert.equal(cancel.payload.ofSourceId, 'goal|g1');
+});
+
 test('findGoalToCancel no reutiliza un gol ya anulado', () => {
   const g1 = { sourceId: 'goal|g1', type: 'goal', teamId: 1, payload: { isHome: true } };
   const g2 = { sourceId: 'goal|g2', type: 'goal', teamId: 1, payload: { isHome: true } };

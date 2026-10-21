@@ -232,6 +232,10 @@ function findGoalToCancel(inc, existing, out) {
     return true;
   });
   if (!mine.length) return null;
-  mine.sort(compareEvents);
-  return mine[mine.length - 1].sourceId;
+  const byPlayer = inc.playerId == null
+    ? mine
+    : mine.filter(e => String(e.playerId ?? e.payload?.scorerId) === String(inc.playerId));
+  const candidates = byPlayer.length ? byPlayer : mine;
+  candidates.sort(compareEvents);
+  return candidates[candidates.length - 1].sourceId;
 }
