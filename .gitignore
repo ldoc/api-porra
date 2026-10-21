@@ -18,3 +18,5 @@ scripts/generatePDF.js
 api/pdf/
 
 .worktrees/
+.vercel
+.env*
