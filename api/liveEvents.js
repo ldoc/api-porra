@@ -221,6 +221,33 @@ export function deriveEvents(obs, existing = [], nowMs = Date.now()) {
   return out;
 }
 
+// Sofascore's /event endpoint can expose the new score before /incidents
+// includes the goal that produced it. Publishing the automatic `score`
+// reconciliation on that first observation advances the match scoreboard one
+// poll before the scorer event. Hold it for one observation: if the goal shows
+// up the reconciliation is no longer needed, and if the divergence persists we
+// publish it as a fallback correction. The grace is shorter than the 30s scrape
+// interval so only the first observation is deferred.
+export const SCORE_CORRECTION_GRACE_MS = 25_000;
+
+export function holdScoreCorrection(events, pending = null, nowMs = Date.now()) {
+  const score = events.find(e => e.type === 'score');
+  if (!score) return { events, pending: null };
+  if (events.some(e => e.type === 'goal' || e.type === 'goal_cancelled')) {
+    return { events, pending: null };
+  }
+  const home = score.payload?.scoreHome ?? null;
+  const away = score.payload?.scoreAway ?? null;
+  const same = !!pending && pending.home === home && pending.away === away;
+  if (same && nowMs - pending.sinceMs >= SCORE_CORRECTION_GRACE_MS) {
+    return { events, pending: null };
+  }
+  return {
+    events: events.filter(e => e.type !== 'score'),
+    pending: same ? pending : { home, away, sinceMs: nowMs }
+  };
+}
+
 function findGoalToCancel(inc, existing, out) {
   if (inc.teamId == null || inc.time == null) return null;
   const all = [...existing, ...out];

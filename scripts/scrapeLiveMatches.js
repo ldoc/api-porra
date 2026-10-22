@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 import { connectDB, LiveMatch, LiveEvent } from '../db/index.js';
 import GameConfig from '../db/models/GameConfig.js';
 import { scrapMatchSource, scrapMatchFull, fetchMatchData } from './matchStats.js';
-import { deriveEvents, LIVE_EXISTING_PROJECTION } from '../api/liveEvents.js';
+import { deriveEvents, holdScoreCorrection, LIVE_EXISTING_PROJECTION } from '../api/liveEvents.js';
 import { selectLiveMatches, buildLiveDoc, liveStatusFromSofascore, buildScrapeLog } from '../api/live.js';
 import {
   liveSnapshotHash,
@@ -25,6 +25,10 @@ const loadCalendar = () => JSON.parse(fs.readFileSync(calendarPath, 'utf-8'));
 let calendar = loadCalendar();
 let calendarLoadedAt = Date.now();
 const lastSnapshotHash = new Map();
+// Marcador adelantado por Sofascore a la espera de que llegue la incidencia del
+// gol: { home, away, sinceMs }. Evita que el marcador suba un poll antes que el
+// evento del goleador.
+const pendingScores = new Map();
 // Only the fantasy feed is cached. Lineups carry the live ratings/minutes and
 // are fetched fresh every tick so a rating change is visible immediately.
 const fantasyCache = new Map();
@@ -64,9 +68,13 @@ async function tick() {
     refreshCalendarIfNeeded(Date.now());
     const live = selectLiveMatches(calendar, Date.now());
     stats.live = live.length;
+    const liveIds = new Set(live.map(m => m.id));
+    for (const id of pendingScores.keys()) {
+      if (!liveIds.has(id)) pendingScores.delete(id);
+    }
     if (live.length === 0) return;
 
-    const ids = live.map(m => m.id);
+    const ids = [...liveIds];
     const [snapshots, finalEvents, existingDocs] = await Promise.all([
       LiveMatch.find({ eventId: { $in: ids } }, 'eventId status').lean(),
       LiveEvent.find({ eventId: { $in: ids }, sourceId: 'final', source: { $ne: 'sim' } }, 'eventId').lean(),
@@ -90,7 +98,7 @@ async function tick() {
     const pending = [];
     let skipped = 0;
     for (const m of live) {
-      if (finished.has(m.id)) continue;
+      if (finished.has(m.id)) { pendingScores.delete(m.id); continue; }
       stats.attempted++;
       try {
         const now = Date.now();
@@ -129,15 +137,21 @@ async function tick() {
         obs.kickoffMs = m.fecha * 1000; // ancla temporal al inicio programado
 
         const hash = liveSnapshotHash(obs);
-        if (lastSnapshotHash.get(m.id) === hash) { skipped++; continue; }
+        const pendingScore = pendingScores.get(m.id) || null;
+        // Con una corrección en espera hay que volver a evaluarla aunque el hash
+        // no cambie: si no, el marcador no se reconciliaría nunca.
+        if (!pendingScore && lastSnapshotHash.get(m.id) === hash) { skipped++; continue; }
 
-        const nuevos = deriveEvents(obs, existingByMatch.get(m.id) || [], Date.now());
-        for (const ev of nuevos) ops.push({ insertOne: { document: ev } });
+        const nuevos = deriveEvents(obs, existingByMatch.get(m.id) || [], now);
+        const held = holdScoreCorrection(nuevos, pendingScore, now);
+        if (held.pending) pendingScores.set(m.id, held.pending);
+        else pendingScores.delete(m.id);
+        for (const ev of held.events) ops.push({ insertOne: { document: ev } });
 
         // 3) snapshot se persiste solo tras confirmar el flush de eventos
         const { stats: matchStats, minute } = await scrapMatchFull(m.id, raw);
         const snapshotDoc = buildLiveDoc(m.id, matchStats, status, Date.now(), minute);
-        pending.push({ match: m, snapshotDoc, hash, eventCount: nuevos.length });
+        pending.push({ match: m, snapshotDoc, hash, eventCount: held.events.length });
       } catch (e) {
         stats.failed++;
         console.error(`${stamp()} Fallo scrapeo ${m.id}: ${e.message}`);

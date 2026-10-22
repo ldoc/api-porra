@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { deriveEvents, foldScore, expireAtEndOfDayUTC, liveEventExpireAt, EVENT_TYPES, LIVE_EXISTING_PROJECTION } from '../api/liveEvents.js';
+import { deriveEvents, foldScore, expireAtEndOfDayUTC, liveEventExpireAt, EVENT_TYPES, LIVE_EXISTING_PROJECTION, holdScoreCorrection, SCORE_CORRECTION_GRACE_MS } from '../api/liveEvents.js';
 
 const NOW = Date.parse('2026-09-16T20:00:00Z');
 
@@ -353,6 +353,66 @@ test('el score emitido queda ultimo por (ts, seq) frente a assist y rating', () 
   const sorted = [...evs].sort((a, b) =>
     (new Date(a.ts).getTime() - new Date(b.ts).getTime()) || ((a.seq || 0) - (b.seq || 0)));
   assert.equal(sorted[sorted.length - 1].type, 'score');
+});
+
+test('holdScoreCorrection retiene el marcador si aun no ha llegado el gol', () => {
+  const evs = deriveEvents(obs({ score: { home: 1, away: 0 } }), [], NOW);
+  assert.ok(evs.some(e => e.type === 'score'));
+  const held = holdScoreCorrection(evs, null, NOW);
+  assert.equal(held.events.some(e => e.type === 'score'), false);
+  assert.deepEqual(held.pending, { home: 1, away: 0, sinceMs: NOW });
+});
+
+test('holdScoreCorrection publica el gol y descarta la correccion pendiente', () => {
+  const pending = { home: 1, away: 0, sinceMs: NOW };
+  const o = obs({ score: { home: 1, away: 0 }, incidents: [
+    { sourceId: 'g', type: 'goal', class: 'regular', time: 22, isHome: true, playerId: 11, homeScore: 1, awayScore: 0, teamId: 1 }
+  ] });
+  const evs = deriveEvents(o, [], NOW + 30000);
+  const held = holdScoreCorrection(evs, pending, NOW + 30000);
+  assert.equal(held.pending, null);
+  assert.equal(held.events.filter(e => e.type === 'goal').length, 1);
+  assert.equal(held.events.some(e => e.type === 'score'), false);
+});
+
+test('holdScoreCorrection publica la correccion si la divergencia persiste', () => {
+  const pending = { home: 1, away: 0, sinceMs: NOW };
+  const at = NOW + SCORE_CORRECTION_GRACE_MS;
+  const evs = deriveEvents(obs({ score: { home: 1, away: 0 } }), [], at);
+  const held = holdScoreCorrection(evs, pending, at);
+  assert.ok(held.events.some(e => e.type === 'score'));
+  assert.equal(held.pending, null);
+});
+
+test('holdScoreCorrection reinicia la espera si el marcador cambia otra vez', () => {
+  const pending = { home: 1, away: 0, sinceMs: NOW };
+  const evs = deriveEvents(obs({ score: { home: 2, away: 0 } }), [], NOW + 30000);
+  const held = holdScoreCorrection(evs, pending, NOW + 30000);
+  assert.equal(held.events.some(e => e.type === 'score'), false);
+  assert.deepEqual(held.pending, { home: 2, away: 0, sinceMs: NOW + 30000 });
+});
+
+test('holdScoreCorrection limpia la espera si el marcador ya cuadra', () => {
+  const pending = { home: 1, away: 0, sinceMs: NOW };
+  const evs = deriveEvents(obs({ score: { home: 0, away: 0 } }), [], NOW + 30000);
+  const held = holdScoreCorrection(evs, pending, NOW + 30000);
+  assert.equal(held.pending, null);
+  assert.equal(held.events.some(e => e.type === 'score'), false);
+});
+
+test('un gol con marcador adelantado no sube el marcador hasta que llega la incidencia', () => {
+  const first = deriveEvents(obs({ score: { home: 1, away: 0 } }), [], NOW);
+  const held1 = holdScoreCorrection(first, null, NOW);
+  assert.deepEqual(foldScore(held1.events), { home: 0, away: 0 });
+
+  const second = obs({ score: { home: 1, away: 0 }, incidents: [
+    { sourceId: 'g', type: 'goal', class: 'regular', time: 22, isHome: true, playerId: 11, homeScore: 1, awayScore: 0, teamId: 1 }
+  ] });
+  const next = deriveEvents(second, held1.events, NOW + 30000);
+  const held2 = holdScoreCorrection(next, held1.pending, NOW + 30000);
+  assert.ok(held2.events.some(e => e.type === 'goal'));
+  assert.equal(held2.events.some(e => e.type === 'score'), false);
+  assert.deepEqual(foldScore([...held1.events, ...held2.events]), { home: 1, away: 0 });
 });
 
 test('findGoalToCancel devuelve null si falta teamId o time', () => {
