@@ -4,7 +4,8 @@ import {
   validarUrlSofascore,
   fetchSofascore,
   requestWithTimeout,
-  backoffDelay
+  backoffDelay,
+  construirCabeceras
 } from '../scripts/sofascoreHttp.js';
 
 const URL_OK = 'https://www.sofascore.com/api/v1/event/1';
@@ -194,4 +195,90 @@ test('backoffDelay crece exponencialmente y añade jitter acotado', () => {
   assert.equal(backoffDelay(2, () => 0), 1200);
   assert.equal(backoffDelay(0, () => 1), 500);
   assert.equal(backoffDelay(3, () => 0.5), 2400 + 100);
+});
+
+test('construirCabeceras añade x-captcha y cookie con token', () => {
+  const h = construirCabeceras('jwt-123');
+  assert.equal(h['x-captcha'], 'jwt-123');
+  assert.equal(h.cookie, 'sofa_captcha=jwt-123');
+  assert.equal(h.referer, 'https://www.sofascore.com/');
+});
+
+test('construirCabeceras sin token no añade cabeceras de captcha', () => {
+  const h = construirCabeceras(null);
+  assert.equal('x-captcha' in h, false);
+  assert.equal('cookie' in h, false);
+});
+
+test('ante 403 challenge invalida y reintenta una vez', { timeout: 2000 }, async () => {
+  const eventos = [];
+  const request = async () => {
+    eventos.push('request');
+    const n = eventos.filter(e => e === 'request').length;
+    return n === 1
+      ? { statusCode: 403, response: '{"error":{"code":403,"reason":"challenge"}}' }
+      : { statusCode: 200, response: '{"ok":true}' };
+  };
+  const invalidarToken = async () => { eventos.push('invalida'); };
+
+  const data = await fetchSofascore(URL_OK, {
+    request, invalidarToken, sleep: async () => {}
+  });
+
+  assert.deepEqual(data, { ok: true });
+  assert.deepEqual(eventos, ['request', 'invalida', 'request']);
+});
+
+test('403 challenge dos veces seguidas lanza HTTP 403 sin bucle', { timeout: 2000 }, async () => {
+  let llamadas = 0;
+  const request = async () => {
+    llamadas++;
+    return { statusCode: 403, response: '{"reason":"challenge"}' };
+  };
+  await assert.rejects(
+    fetchSofascore(URL_OK, {
+      request,
+      invalidarToken: async () => {},
+      sleep: async () => {}
+    }),
+    /HTTP 403/
+  );
+  assert.equal(llamadas, 2);
+});
+
+test('403 sin challenge no invalida', { timeout: 2000 }, async () => {
+  let llamadas = 0;
+  const request = async () => {
+    llamadas++;
+    return { statusCode: 403, response: '{"error":{"code":403,"reason":"Forbidden"}}' };
+  };
+  await assert.rejects(
+    fetchSofascore(URL_OK, {
+      request,
+      invalidarToken: async () => { throw new Error('no debía invalidar'); },
+      sleep: async () => {}
+    }),
+    /HTTP 403/
+  );
+  assert.equal(llamadas, 1);
+});
+
+test('challenge no consume reintentos de backoff: tras invalidar aguanta 500s y recupera', { timeout: 2000 }, async () => {
+  let llamadas = 0;
+  let invalidaciones = 0;
+  const request = async () => {
+    llamadas++;
+    if (llamadas === 1) return { statusCode: 403, response: '{"reason":"challenge"}' };
+    return llamadas < 4
+      ? { statusCode: 500, response: '' }
+      : { statusCode: 200, response: '{"ok":true}' };
+  };
+  const data = await fetchSofascore(URL_OK, {
+    request,
+    invalidarToken: async () => { invalidaciones++; },
+    sleep: async () => {},
+    random: () => 0
+  });
+  assert.deepEqual(data, { ok: true });
+  assert.equal(invalidaciones, 1);
 });
