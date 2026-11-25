@@ -121,3 +121,25 @@ fetchSofascore(url)
 - El JWT podría caducar en horas; el refresco on-demand lo hace transparente.
 - Sofascore puede endurecer más el anti-bot en el futuro; el error
   `CAPTCHA_FAILED` lo dejará visible en los logs.
+
+## Enmienda (2026-11-25): renovación manual, sin Playwright
+
+La sonda de factibilidad Playwright FALLÓ: Turnstile rechaza navegadores
+automatizados en todos los modos (headless, headed bajo Xvfb y headed en
+display real con click humano válido → "no era válido"). En paralelo se
+validó con petición real que el token manual SÍ funciona con el fingerprint
+firefox-117 del scraper (200 con cabecera `X-Captcha`; el token es ligado a
+la IP, TTL ~12 h).
+
+Cambio de diseño aprobado por el usuario:
+
+- Se elimina el refresco Playwright (código y devDependency).
+- `getSofascoreToken`: env `SOFASCORE_CAPTCHA_TOKEN` → cache de fichero
+  (releída en cada llamada → renovación en caliente sin reiniciar) → error
+  `CAPTCHA_FAILED` con la URL de renovación e instrucciones.
+- Renovación manual semiautomática: abrir la URL del captcha en el
+  navegador de confianza (resuelve solo), copiar localStorage
+  `sofa.captcha.token` y ejecutar
+  `node scripts/sofascoreToken.js --set <jwt>`.
+- `sofascoreHttp.js` queda igual salvo que ante `403 challenge` solo
+  invalida la cache y reintenta una vez (sin refrescar forzado).

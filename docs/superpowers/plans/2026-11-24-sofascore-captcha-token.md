@@ -264,90 +264,77 @@ git commit -m "feat(sofascore): cache y validez del token anti-captcha"
 
 ---
 
-### Task 2: Refresco con Playwright + CLI de sonda
+### Task 2 (AMENDADA 2026-11-25): Token en modo manual + CLI de renovación
+
+> Enmienda aprobada por el usuario tras la sonda de factibilidad: Turnstile
+> rechaza navegadores automatizados (probado headless, headed bajo Xvfb y
+> headed en display real con click humano válido → "no era válido"). El token
+> manual SÍ funciona con el fingerprint firefox-117 del scraper (evidencia:
+> 200 con cabecera `X-Captcha`, probado el 2026-11-24). El JWT es ligado a la
+> IP (~12 h de TTL). Se elimina el refresco Playwright y se queda renovación
+> manual semiautomática.
 
 **Files:**
-- Modify: `scripts/sofascoreToken.js` (sustituir el stub `refrescarConPlaywright`, añadir CLI al final)
-- Modify: `package.json` (devDependency `playwright`)
+- Modify: `scripts/sofascoreToken.js` (revertir el commit Playwright y sobre él: quitar stub/mutex/`refrescar`; `getSofascoreToken` manual con error de renovación; CLI `--set`)
+- Modify: `tests/sofascoreToken.test.js` (tests sin `refrescar`; nuevos tests del error `CAPTCHA_FAILED`)
+- Modify: `package.json` / `package-lock.json` (vía revert: fuera `playwright`)
 
 **Interfaces:**
-- Consumes: `getSofascoreToken` (Task 1) como orquestador; `refrescarConPlaywright` es su `refrescar` por defecto.
-- Produces: `refrescarConPlaywright({ lanzarNavegador? } = {}): Promise<string>` (lanzarNavegador inyectable para tests futuros); CLI `node scripts/sofascoreToken.js [--force]` que imprime `{ ok, expiracion, ttlMin }` y persiste la cache (doble uso: sonda de factibilidad y relleno manual).
+- Consumes: Task 1 (`decodeJwtExpMs`, `necesitaRefresco`, `leerCache`, `escribirCache`, `invalidarCache`, `CACHE_PATH`, `REFRESH_MARGIN_MS`).
+- Produces (Task 3 y 4 dependen de estas firmas exactas):
+  - `RENOVACION_URL: string` — URL del captcha para renovar a mano.
+  - `getSofascoreToken({ env?, fsFn?, ruta?, ahoraMs? }?): string` — env override → cache de fichero (releída en cada llamada: renovación en caliente sin reiniciar el scraper) → throw `CAPTCHA_FAILED` con instrucciones (incluye `RENOVACION_URL`).
+  - CLI: `node scripts/sofascoreToken.js --set <jwt>` persiste la cache y muestra `{ ok, expiracion, ttlMin }`; sin args verifica el token vigente (env o cache) e imprime lo mismo.
 
-- [ ] **Step 1: Install Playwright (devDependency) + Chromium**
+- [ ] **Step 1: Revert the Playwright commit**
 
-Run: `npm i -D playwright && npx playwright install chromium`
-Expected: instala sin errores (descarga de Chromium ~150 MB; puede tardar varios minutos).
+Run: `git revert --no-edit 6c44be1`
+Expected: commit de revert que restaura el stub `refrescarConPlaywright` y quita `playwright` de `package.json`/`package-lock.json`.
 
-- [ ] **Step 2: Replace the stub with the real Playwright refresh**
+- [ ] **Step 2: Simplify the module to manual mode**
 
-Sustituir en `scripts/sofascoreToken.js` el stub por:
+En `scripts/sofascoreToken.js`: eliminar el stub `refrescarConPlaywright`, el mutex `refrescoEnCurso` y el parámetro `refrescar`/`force`. El `getSofascoreToken` queda:
 
 ```js
-const CAPTCHA_URL = 'https://www.sofascore.com/captcha.html?redirectUrl=' +
+// URL para renovar a mano en el navegador de confianza (Turnstile resuelve pasivo).
+export const RENOVACION_URL = 'https://www.sofascore.com/captcha.html?redirectUrl=' +
   encodeURIComponent('https://www.sofascore.com/');
-const SOLVE_TIMEOUT_MS = 60_000;
 
-async function lanzarChromium(opciones) {
-  // Import lazy: en Vercel no está Playwright y este módulo no debe romper el deploy.
-  const { chromium } = await import('playwright');
-  return chromium.launch(opciones);
-}
-
-// Resuelve Turnstile en la página de captcha y captura el JWT del POST /token/captcha.
-async function resolverTurnstile(lanzar) {
-  const navegador = await lanzar();
-  try {
-    const contexto = await navegador.newContext();
-    const pagina = await contexto.newPage();
-    const respuestaPromise = pagina.waitForResponse(
-      r => r.url().includes('/api/v1/token/captcha') && r.status() === 200,
-      { timeout: SOLVE_TIMEOUT_MS }
-    );
-    await pagina.goto(CAPTCHA_URL, { waitUntil: 'domcontentloaded' });
-    const cuerpo = await (await respuestaPromise).json();
-    if (!cuerpo?.token) throw new Error('respuesta sin token');
-    return cuerpo.token;
-  } finally {
-    await navegador.close().catch(() => {});
-  }
-}
-
-// Cascada: headless → headed → error con instrucciones manuales.
-export async function refrescarConPlaywright({ lanzarNavegador } = {}) {
-  const modos = [
-    { nombre: 'headless', lanzar: () => (lanzarNavegador ?? lanzarChromium)({ headless: true }) },
-    { nombre: 'headed', lanzar: () => (lanzarNavegador ?? lanzarChromium)({ headless: false }) }
-  ];
-  let ultimoError = null;
-  for (const modo of modos) {
-    try {
-      const token = await resolverTurnstile(modo.lanzar);
-      console.error(`${new Date().toISOString()} token Sofascore obtenido (${modo.nombre})`);
-      return token;
-    } catch (e) {
-      ultimoError = e;
-    }
-  }
+// Env override > cache de fichero (se relee en cada llamada: renovar en caliente sin reiniciar).
+export function getSofascoreToken({
+  env = process.env,
+  fsFn = fs,
+  ruta = CACHE_PATH,
+  ahoraMs = Date.now()
+} = {}) {
+  if (env.SOFASCORE_CAPTCHA_TOKEN) return env.SOFASCORE_CAPTCHA_TOKEN;
+  const cache = leerCache(fsFn, ruta);
+  if (!necesitaRefresco(cache, ahoraMs)) return cache.token;
   throw new Error(
-    'CAPTCHA_FAILED: Turnstile no resolvió (' + ultimoError?.message + '). ' +
-    'Pega a mano el token de tu navegador (localStorage "sofa.captcha.token" o cookie ' +
-    'sofa_captcha) en data/.sofascore-token.json {"token":"..."} o en la var de entorno ' +
-    'SOFASCORE_CAPTCHA_TOKEN.'
+    'CAPTCHA_FAILED: sin token de Sofascore válido. Renueva: 1) abre en tu navegador ' +
+    RENOVACION_URL + ' 2) tras el redirect copia localStorage "sofa.captcha.token" ' +
+    '3) ejecuta: node scripts/sofascoreToken.js --set <token> (o define ' +
+    'SOFASCORE_CAPTCHA_TOKEN en .env y reinicia).'
   );
 }
 ```
 
-- [ ] **Step 3: Add the CLI block at the end of the module**
-
-Añadir al final de `scripts/sofascoreToken.js`:
+- [ ] **Step 3: Replace the CLI block at the end of the module**
 
 ```js
-// CLI: sonda de factibilidad y utilidad de relleno manual de la cache.
+// CLI: renovación manual de la cache y verificación del token vigente.
 const esCli = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (esCli) {
+  const args = process.argv.slice(2);
   try {
-    const token = await getSofascoreToken({ force: process.argv.includes('--force') });
+    if (args[0] === '--set') {
+      if (!args[1]) {
+        console.error('uso: node scripts/sofascoreToken.js --set <jwt>');
+        process.exit(1);
+      }
+      escribirCache(args[1]);
+    }
+    const token = args[0] === '--set' ? args[1] : getSofascoreToken();
     const expMs = decodeJwtExpMs(token);
     console.log(JSON.stringify({
       ok: true,
@@ -362,17 +349,45 @@ if (esCli) {
 }
 ```
 
-Nota: el guard `esCli` hace que el bloque no se ejecute cuando el módulo se importa desde tests o desde `sofascoreHttp.js`.
+- [ ] **Step 4: Update the tests**
 
-- [ ] **Step 4: Run unit tests (still green, no browser needed)**
+En `tests/sofascoreToken.test.js`: eliminar los tres tests que inyectaban `refrescar` (env override, force refresca y persiste, mutex) y sustituirlos por (añadiendo `RENOVACION_URL` al import):
+
+```js
+test('getSofascoreToken: override por env gana incluso sin cache', () => {
+  const token = getSofascoreToken({ env: { SOFASCORE_CAPTCHA_TOKEN: 'manual-env' }, ruta: rutaTemp() });
+  assert.equal(token, 'manual-env');
+});
+
+test('getSofascoreToken: sin token → error CAPTCHA_FAILED con instrucciones de renovación', () => {
+  assert.throws(
+    () => getSofascoreToken({ env: {}, ruta: rutaTemp() }),
+    (e) => e.message.startsWith('CAPTCHA_FAILED') && e.message.includes(RENOVACION_URL)
+  );
+});
+
+test('getSofascoreToken: cache caducada → mismo error de renovación', () => {
+  const ruta = rutaTemp();
+  escribirCache(jwtConExp((Date.now() - 1000) / 1000), { ruta });
+  assert.throws(() => getSofascoreToken({ env: {}, ruta }), /CAPTCHA_FAILED/);
+});
+```
+
+El test "cache válida → devuelve el token" se conserva pero sin el parámetro `refrescar`:
+
+```js
+test('getSofascoreToken: cache válida → devuelve el token', () => {
+  const ruta = rutaTemp();
+  const token = jwtConExp((Date.now() + REFRESH_MARGIN_MS * 2) / 1000);
+  escribirCache(token, { ruta });
+  assert.equal(getSofascoreToken({ env: {}, ruta }), token);
+});
+```
+
+- [ ] **Step 5: Run tests to verify they pass**
 
 Run: `node --test tests/sofascoreToken.test.js`
-Expected: PASS (los tests inyectan su propio `refrescar`; el real no se invoca).
-
-- [ ] **Step 5: Feasibility probe (manual, real network + browser)**
-
-Run: `node scripts/sofascoreToken.js`
-Expected: imprime `{ ok: true, expiracion: ..., ttlMin: ... }` y crea `data/.sofascore-token.json`. Si Turnstile no resuelve en headless, se abre una ventana de Chromium (headed) que lo resuelve sola (Turnstile managed suele ser pasivo). Si tampoco, imprime `CAPTCHA_FAILED` con instrucciones manuales — en ese caso, parar y re-evaluar el diseño con el usuario antes de seguir.
+Expected: PASS (9 tests: los 4 primeros de decode/refresco lógico, roundtrip cache, y los nuevos).
 
 - [ ] **Step 6: Verify the cache file is git-ignored**
 
@@ -382,8 +397,8 @@ Expected: `IGNORADO` (lo cubre la regla `data/*` existente). Si no, añadir la r
 - [ ] **Step 7: Commit**
 
 ```bash
-git add scripts/sofascoreToken.js package.json package-lock.json
-git commit -m "feat(sofascore): refresco automático del token vía Playwright (Turnstile)"
+git add scripts/sofascoreToken.js tests/sofascoreToken.test.js
+git commit -m "feat(sofascore): renovación manual del token anti-captcha (CLI --set)"
 ```
 
 ---
@@ -398,7 +413,7 @@ git commit -m "feat(sofascore): refresco automático del token vía Playwright (
 - Consumes: `getSofascoreToken`, `invalidarCache` de `scripts/sofascoreToken.js` (vía import lazy).
 - Produces:
   - `construirCabeceras(token: string | null): object` (exportada para tests).
-  - `fetchSofascore(url, { timeoutMs, retries, request, sleep, random, invalidarToken, refrescarToken })` — dos deps nuevas inyectables; defaults con import lazy try/catch (Vercel-safe).
+  - `fetchSofascore(url, { timeoutMs, retries, request, sleep, random, invalidarToken })` — una dep nueva inyectable; default con import lazy try/catch (Vercel-safe). Ante `403 challenge` invalida la cache y reintenta una vez (la relectura de cache/env al reconstruir la petición cubre renovaciones en caliente).
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -426,7 +441,7 @@ test('construirCabeceras sin token no añade cabeceras de captcha', () => {
   assert.equal('cookie' in h, false);
 });
 
-test('ante 403 challenge invalida, refresca y reintenta una vez', { timeout: 2000 }, async () => {
+test('ante 403 challenge invalida y reintenta una vez', { timeout: 2000 }, async () => {
   const eventos = [];
   const request = async () => {
     eventos.push('request');
@@ -436,14 +451,13 @@ test('ante 403 challenge invalida, refresca y reintenta una vez', { timeout: 200
       : { statusCode: 200, response: '{"ok":true}' };
   };
   const invalidarToken = async () => { eventos.push('invalida'); };
-  const refrescarToken = async () => { eventos.push('refresca'); return 'jwt-nuevo'; };
 
   const data = await fetchSofascore(URL_OK, {
-    request, invalidarToken, refrescarToken, sleep: async () => {}
+    request, invalidarToken, sleep: async () => {}
   });
 
   assert.deepEqual(data, { ok: true });
-  assert.deepEqual(eventos, ['request', 'invalida', 'refresca', 'request']);
+  assert.deepEqual(eventos, ['request', 'invalida', 'request']);
 });
 
 test('403 challenge dos veces seguidas lanza HTTP 403 sin bucle', { timeout: 2000 }, async () => {
@@ -456,7 +470,6 @@ test('403 challenge dos veces seguidas lanza HTTP 403 sin bucle', { timeout: 200
     fetchSofascore(URL_OK, {
       request,
       invalidarToken: async () => {},
-      refrescarToken: async () => 'x',
       sleep: async () => {}
     }),
     /HTTP 403/
@@ -464,7 +477,7 @@ test('403 challenge dos veces seguidas lanza HTTP 403 sin bucle', { timeout: 200
   assert.equal(llamadas, 2);
 });
 
-test('403 sin challenge no invalida ni refresca', { timeout: 2000 }, async () => {
+test('403 sin challenge no invalida', { timeout: 2000 }, async () => {
   let llamadas = 0;
   const request = async () => {
     llamadas++;
@@ -474,7 +487,6 @@ test('403 sin challenge no invalida ni refresca', { timeout: 2000 }, async () =>
     fetchSofascore(URL_OK, {
       request,
       invalidarToken: async () => { throw new Error('no debía invalidar'); },
-      refrescarToken: async () => { throw new Error('no debía refrescar'); },
       sleep: async () => {}
     }),
     /HTTP 403/
@@ -482,27 +494,9 @@ test('403 sin challenge no invalida ni refresca', { timeout: 2000 }, async () =>
   assert.equal(llamadas, 1);
 });
 
-test('refresco fallido ante challenge lanza HTTP 403 sin reintentar', { timeout: 2000 }, async () => {
+test('challenge no consume reintentos de backoff: tras invalidar aguanta 500s y recupera', { timeout: 2000 }, async () => {
   let llamadas = 0;
-  const request = async () => {
-    llamadas++;
-    return { statusCode: 403, response: '{"reason":"challenge"}' };
-  };
-  await assert.rejects(
-    fetchSofascore(URL_OK, {
-      request,
-      invalidarToken: async () => {},
-      refrescarToken: async () => null,
-      sleep: async () => {}
-    }),
-    /HTTP 403/
-  );
-  assert.equal(llamadas, 1);
-});
-
-test('challenge no consume reintentos de backoff: tras refrescar aguanta 500s y recupera', { timeout: 2000 }, async () => {
-  let llamadas = 0;
-  let refrescos = 0;
+  let invalidaciones = 0;
   const request = async () => {
     llamadas++;
     if (llamadas === 1) return { statusCode: 403, response: '{"reason":"challenge"}' };
@@ -512,13 +506,12 @@ test('challenge no consume reintentos de backoff: tras refrescar aguanta 500s y 
   };
   const data = await fetchSofascore(URL_OK, {
     request,
-    invalidarToken: async () => {},
-    refrescarToken: async () => { refrescos++; return 'jwt-nuevo'; },
+    invalidarToken: async () => { invalidaciones++; },
     sleep: async () => {},
     random: () => 0
   });
   assert.deepEqual(data, { ok: true });
-  assert.equal(refrescos, 1);
+  assert.equal(invalidaciones, 1);
 });
 ```
 
@@ -534,7 +527,7 @@ En `scripts/sofascoreHttp.js`, tras las `CABECERAS` existentes añadir:
 ```js
 const CAPTCHA_CHALLENGE_RE = /"reason"\s*:\s*"challenge"/;
 
-// Imports lazy con try/catch: en Vercel no hay Playwright ni cache local; se scrapea sin token.
+// Imports lazy con try/catch: en Vercel no hay cache local de token; se scrapea sin token.
 const cargarTokenPorDefecto = async () => {
   try {
     const { getSofascoreToken } = await import('./sofascoreToken.js');
@@ -547,13 +540,6 @@ const invalidarTokenPorDefecto = async () => {
     const { invalidarCache } = await import('./sofascoreToken.js');
     invalidarCache();
   } catch {}
-};
-
-const refrescarTokenPorDefecto = async () => {
-  try {
-    const { getSofascoreToken } = await import('./sofascoreToken.js');
-    return await getSofascoreToken({ force: true });
-  } catch { return null; }
 };
 
 // Cabeceras de la petición: las base + X-Captcha y cookie sofa_captcha si hay token.
@@ -586,7 +572,6 @@ export async function fetchSofascore(endpointUrl, {
   retries = DEFAULT_RETRIES,
   request = makeSofascoreRequest,
   invalidarToken = invalidarTokenPorDefecto,
-  refrescarToken = refrescarTokenPorDefecto,
   sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   random = Math.random
 } = {}) {
@@ -604,8 +589,8 @@ export async function fetchSofascore(endpointUrl, {
         if (reintentoChallenge) throw new Error('HTTP 403');
         reintentoChallenge = true;
         await invalidarToken();
-        const nuevoToken = await refrescarToken();
-        if (!nuevoToken) throw new Error('HTTP 403');
+        // La renovación en caliente la cubre la relectura de cache/env al
+        // reconstruir la petición (makeSofascoreRequest).
         attempt--; // el reintento de challenge no consume reintentos de backoff
         continue;
       }
@@ -659,8 +644,11 @@ git commit -m "feat(sofascore): envía X-Captcha y reintenta ante 403 challenge"
 Añadir al final:
 
 ```
-# Token anti-captcha de Sofascore (opcional, override manual). Se refresca solo
-# con Playwright en local; solo needed si Turnstile falla y quieres pegarlo a mano:
+# Token anti-captcha de Sofascore (opcional, override manual estático; requiere
+# reiniciar el scraper). Lo habitual es renovar en caliente sin reiniciar:
+#   node scripts/sofascoreToken.js --set <jwt>
+# (el JWT se obtiene abriendo la URL de renovación en tu navegador y copiando
+# localStorage "sofa.captcha.token"):
 # SOFASCORE_CAPTCHA_TOKEN=eyJhbGciOi...
 ```
 
@@ -672,18 +660,25 @@ En "Datos de Sofascore" añadir:
 ### Token anti-captcha (Turnstile)
 
 Sofascore exige resolver un captcha (Cloudflare Turnstile) que emite un JWT
-(`POST /api/v1/token/captcha`), válido hasta el `exp` del propio JWT. Sin él,
-el edge responde `403 {"reason":"challenge"}` a todas las peticiones de
-`www.sofascore.com`.
+(`POST /api/v1/token/captcha`), ligado a la IP y válido hasta el `exp` del
+propio JWT (~12 h). Sin él, el edge responde `403 {"reason":"challenge"}` a
+los clientes que marca como bots.
 
-- `scripts/sofascoreToken.js` lo gestiona: cache en `data/.sofascore-token.json`
-  (gitignored), refresco on-demand con Playwright (headless → headed), mutex
-  para llamadas concurrentes y override manual vía `SOFASCORE_CAPTCHA_TOKEN`.
-- `scripts/sofascoreHttp.js` envía el JWT en `x-captcha` + cookie `sofa_captcha`
-  y ante `403 challenge` invalida, refresca y reintenta una vez.
-- Sonda manual: `node scripts/sofascoreToken.js [--force]`.
-- Playwright es devDependency (solo local); `server.js` en Vercel importa el
-  módulo de token de forma lazy con try/catch → allí se scrapea sin token.
+- `scripts/sofascoreToken.js` lo gestiona en modo manual: cache en
+  `data/.sofascore-token.json` (gitignored, releída en cada llamada) y
+  override vía `SOFASCORE_CAPTCHA_TOKEN` en `.env`.
+- Renovación (cuando caduca o salta `403 challenge`): abrir en el navegador
+  de confianza `https://www.sofascore.com/captcha.html?redirectUrl=<home
+  url-encoded>` (el widget resuelve solo tras el redirect), copiar
+  localStorage `sofa.captcha.token` y ejecutar
+  `node scripts/sofascoreToken.js --set <jwt>`. Sin reiniciar el scraper.
+- La automatización con Playwright NO es viable: Turnstile rechaza
+  navegadores automatizados (probado headless y headed con click válido). No
+  reintroducirla.
+- `scripts/sofascoreHttp.js` envía el JWT en `x-captcha` + cookie
+  `sofa_captcha` y ante `403 challenge` invalida la cache y reintenta una vez.
+- `server.js` en Vercel importa el módulo de token de forma lazy con
+  try/catch → allí se scrapea sin token.
 ```
 
 - [ ] **Step 3: Full suite + syntax check**
@@ -693,8 +688,12 @@ Expected: PASS sin errores.
 
 - [ ] **Step 4: E2E verification of the live scraper**
 
+Precondición (controller, antes del dispatch): token vigente en cache —
+`node scripts/sofascoreToken.js --set <jwt>` con el JWT que facilitó el
+usuario (no va en el repo: gitignored).
+
 Run: `node --env-file=.env scripts/scrapeLiveMatches.js --once`
-Expected: `"ok": >0` para los partidos en ventana (hoy hay 7 live) y ningún `HTTP 403`. Ver también que `data/.sofascore-token.json` se ha creado/actualizado.
+Expected: `"ok": >0` para los partidos en ventana y ningún `HTTP 403`.
 
 - [ ] **Step 5: Commit**
 
