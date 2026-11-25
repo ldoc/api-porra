@@ -52,6 +52,7 @@ export const RENOVACION_URL = 'https://www.sofascore.com/captcha.html?redirectUr
 
 const REFRESCO_INTENTOS = 2;
 const REFRESCO_TIMEOUT_MS = 90_000;
+const REFRESCO_CONJUNTO_TIMEOUT_MS = 120_000;
 
 function binarioCamoufox(env = process.env) {
   if (env.CAMOUFOX_BINARIO) return env.CAMOUFOX_BINARIO;
@@ -78,22 +79,36 @@ async function lanzarCamoufox() {
   return Camoufox({ executable_path: binario, headless: 'virtual', locale: 'es-ES' });
 }
 
+// Cuerpo acotado: goto + waitForResponse + json. Sin gestión de navegador
+// aquí: el llamador garantiza el close() incluso cuando gana el timeout global.
+async function capturarTokenCamoufox(navegador) {
+  const contexto = await navegador.newContext();
+  const pagina = await contexto.newPage();
+  const respuestaPromise = pagina.waitForResponse(
+    r => r.url().includes('/api/v1/token/captcha') && r.status() === 200,
+    { timeout: REFRESCO_TIMEOUT_MS }
+  );
+  // Evita un unhandledRejection si goto falla antes de esperar la respuesta.
+  respuestaPromise.catch(() => {});
+  await pagina.goto(RENOVACION_URL, { waitUntil: 'domcontentloaded' });
+  const cuerpo = await (await respuestaPromise).json();
+  if (!cuerpo?.token) throw new Error('respuesta sin token');
+  return cuerpo.token;
+}
+
 // Resuelve el Turnstile en la página de captcha y captura el JWT del
 // POST /token/captcha. Desatendido: display virtual propio, sin interacción.
+// Timeout global: un goto/colgado no deja el mutex del módulo fijo forever.
 async function resolverTurnstileCamoufox() {
   const navegador = await lanzarCamoufox();
+  let timer;
+  const timeoutPromise = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error('timeout global del refresco')), REFRESCO_CONJUNTO_TIMEOUT_MS);
+  });
   try {
-    const contexto = await navegador.newContext();
-    const pagina = await contexto.newPage();
-    const respuestaPromise = pagina.waitForResponse(
-      r => r.url().includes('/api/v1/token/captcha') && r.status() === 200,
-      { timeout: REFRESCO_TIMEOUT_MS }
-    );
-    await pagina.goto(RENOVACION_URL, { waitUntil: 'domcontentloaded' });
-    const cuerpo = await (await respuestaPromise).json();
-    if (!cuerpo?.token) throw new Error('respuesta sin token');
-    return cuerpo.token;
+    return await Promise.race([capturarTokenCamoufox(navegador), timeoutPromise]);
   } finally {
+    clearTimeout(timer);
     await navegador.close().catch(() => {});
   }
 }
@@ -120,7 +135,9 @@ export async function refrescarConCamoufox() {
 }
 
 // Mutex: los refrescos concurrentes comparten una única promesa (un solo
-// navegador camoufox). env override > cache válida > refresco automático.
+// navegador camoufox). Los callers concurrentes con opciones inyectadas
+// distintas comparten el refresco del primero; en producción todos usan
+// los defaults. env override > cache válida > refresco automático.
 let refrescoEnCurso = null;
 
 export async function getSofascoreToken({
