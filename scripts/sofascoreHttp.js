@@ -13,12 +13,22 @@ const DEFAULT_RETRIES = 2;
 
 const CAPTCHA_CHALLENGE_RE = /"reason"\s*:\s*"challenge"/;
 
+let ultimoAvisoCaptcha = 0;
+const AVISO_CAPTCHA_MS = 5 * 60_000;
+
 // Imports lazy con try/catch: en Vercel no hay cache local de token; se scrapea sin token.
+// El CAPTCHA_FAILED se loguea (con límite) para que el operador vea cómo renovar.
 const cargarTokenPorDefecto = async () => {
   try {
     const { getSofascoreToken } = await import('./sofascoreToken.js');
-    return await getSofascoreToken();
-  } catch { return null; }
+    return getSofascoreToken();
+  } catch (e) {
+    if (String(e?.message).startsWith('CAPTCHA_FAILED') && Date.now() - ultimoAvisoCaptcha > AVISO_CAPTCHA_MS) {
+      ultimoAvisoCaptcha = Date.now();
+      console.error(`${new Date().toISOString()} ${e.message}`);
+    }
+    return null;
+  }
 };
 
 const invalidarTokenPorDefecto = async () => {
