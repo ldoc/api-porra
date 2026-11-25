@@ -536,8 +536,10 @@ const { stats, statusType, minute } = await scrapMatchFull(eventId);
 
 Sofascore exige resolver un captcha (Cloudflare Turnstile) que emite un JWT
 (`POST /api/v1/token/captcha`), ligado a la IP y válido hasta el `exp` del
-propio JWT (~12 h). Sin él, el edge responde `403 {"reason":"challenge"}` a
-los clientes que marca como bots.
+propio JWT (**~1 h** de TTL observado). Sin él, el edge responde
+`403 {"reason":"challenge"}` a los clientes que marca como bots. El flag es
+dinámico: con la IP "limpia" las peticiones sin token pueden pasar; bajo
+volumen de scraping se re-activa.
 
 - `scripts/sofascoreToken.js` lo gestiona en modo manual: cache en
   `data/.sofascore-token.json` (gitignored, releída en cada llamada) y
