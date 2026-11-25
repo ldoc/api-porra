@@ -26,5 +26,12 @@
     "octokit": "^5.0.5",
     "pdfkit": "^0.20.1",
     "sharp": "^0.35.3"
+  },
+  "devDependencies": {
+    "camoufox": "^0.5.9",
+    "playwright-core": "^1.62.0"
+  },
+  "overrides": {
+    "impit": "file:vendor/impit-stub"
   }
 }
