@@ -10,8 +10,7 @@ import {
   leerCache,
   escribirCache,
   invalidarCache,
-  getSofascoreToken,
-  RENOVACION_URL
+  getSofascoreToken
 } from '../scripts/sofascoreToken.js';
 
 const jwtConExp = (expSeg) => {
