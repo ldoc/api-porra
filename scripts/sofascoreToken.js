@@ -46,9 +46,57 @@ export function invalidarCache({ fsFn = fs, ruta = CACHE_PATH } = {}) {
   try { fsFn.unlinkSync(ruta); } catch {}
 }
 
-// Stub: Task 2 lo sustituye por el refresco real con Playwright.
-export async function refrescarConPlaywright() {
-  throw new Error('CAPTCHA_NOT_IMPLEMENTED');
+const CAPTCHA_URL = 'https://www.sofascore.com/captcha.html?redirectUrl=' +
+  encodeURIComponent('https://www.sofascore.com/');
+const SOLVE_TIMEOUT_MS = 60_000;
+
+async function lanzarChromium(opciones) {
+  // Import lazy: en Vercel no está Playwright y este módulo no debe romper el deploy.
+  const { chromium } = await import('playwright');
+  return chromium.launch(opciones);
+}
+
+// Resuelve Turnstile en la página de captcha y captura el JWT del POST /token/captcha.
+async function resolverTurnstile(lanzar) {
+  const navegador = await lanzar();
+  try {
+    const contexto = await navegador.newContext();
+    const pagina = await contexto.newPage();
+    const respuestaPromise = pagina.waitForResponse(
+      r => r.url().includes('/api/v1/token/captcha') && r.status() === 200,
+      { timeout: SOLVE_TIMEOUT_MS }
+    );
+    await pagina.goto(CAPTCHA_URL, { waitUntil: 'domcontentloaded' });
+    const cuerpo = await (await respuestaPromise).json();
+    if (!cuerpo?.token) throw new Error('respuesta sin token');
+    return cuerpo.token;
+  } finally {
+    await navegador.close().catch(() => {});
+  }
+}
+
+// Cascada: headless → headed → error con instrucciones manuales.
+export async function refrescarConPlaywright({ lanzarNavegador } = {}) {
+  const modos = [
+    { nombre: 'headless', lanzar: () => (lanzarNavegador ?? lanzarChromium)({ headless: true }) },
+    { nombre: 'headed', lanzar: () => (lanzarNavegador ?? lanzarChromium)({ headless: false }) }
+  ];
+  let ultimoError = null;
+  for (const modo of modos) {
+    try {
+      const token = await resolverTurnstile(modo.lanzar);
+      console.error(`${new Date().toISOString()} token Sofascore obtenido (${modo.nombre})`);
+      return token;
+    } catch (e) {
+      ultimoError = e;
+    }
+  }
+  throw new Error(
+    'CAPTCHA_FAILED: Turnstile no resolvió (' + ultimoError?.message + '). ' +
+    'Pega a mano el token de tu navegador (localStorage "sofa.captcha.token" o cookie ' +
+    'sofa_captcha) en data/.sofascore-token.json {"token":"..."} o en la var de entorno ' +
+    'SOFASCORE_CAPTCHA_TOKEN.'
+  );
 }
 
 // Mutex: los refrescos concurrentes comparten una única promesa (un solo navegador).
@@ -75,4 +123,22 @@ export async function getSofascoreToken({
       .finally(() => { refrescoEnCurso = null; });
   }
   return refrescoEnCurso;
+}
+
+// CLI: sonda de factibilidad y utilidad de relleno manual de la cache.
+const esCli = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (esCli) {
+  try {
+    const token = await getSofascoreToken({ force: process.argv.includes('--force') });
+    const expMs = decodeJwtExpMs(token);
+    console.log(JSON.stringify({
+      ok: true,
+      expiracion: expMs ? new Date(expMs).toISOString() : null,
+      ttlMin: expMs ? Math.round((expMs - Date.now()) / 60000) : null
+    }, null, 2));
+    process.exit(0);
+  } catch (e) {
+    console.error(e.message);
+    process.exit(1);
+  }
 }
