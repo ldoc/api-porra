@@ -143,3 +143,41 @@ Cambio de diseño aprobado por el usuario:
   `node scripts/sofascoreToken.js --set <jwt>`.
 - `sofascoreHttp.js` queda igual salvo que ante `403 challenge` solo
   invalida la cache y reintenta una vez (sin refrescar forzado).
+
+## Enmienda 2 (2026-11-25): renovación automática desatendida con camoufox
+
+Sondas de factibilidad (2026-11-25, todas reales contra Sofascore):
+
+- Playwright (Chromium): rechazado en headless, headed-Xvfb y headed en
+  display real incluso con click humano válido.
+- patchright + Chrome real del sistema: rechazado.
+- **camoufox (Firefox endurecido, motor Gecko): ACEPTADO.** Modo
+  `headless: 'virtual'` (display virtual propio) + pantalla
+  `1920x1080x24` (`CAMOUFOX_VIRTUAL_DISPLAY_SIZE`): Turnstile resuelve
+  pasivamente, sin interacción ni ventana visible. Sin el tamaño de pantalla
+  explícito el display virtual por defecto NO pasa. El headless normal de
+  camoufox tampoco pasa. El headed en display real del usuario también pasa.
+- TTL del JWT emitido: **~60 min** (igual que el obtenido desde el
+  navegador).
+
+Cambio de diseño aprobado por el usuario:
+
+- `getSofascoreToken` recupera la orquestación con refresco automático y
+  mutex (patrón de la Task 1 original): env override → cache válida →
+  refresco con camoufox → persistencia en cache → token.
+- **Requisito explícito del usuario: la vía manual se CONSERVA como
+  fallback** — si camoufox falla (Sofascore endurece contra él, binario
+  ausente, sin Xvfb...), el error `CAPTCHA_FAILED` mantiene las
+  instrucciones manuales (URL del captcha + `--set <jwt>` + env
+  `SOFASCORE_CAPTCHA_TOKEN`), y el CLI `--set` sigue existiendo.
+- Requisitos locales documentados (Ubuntu 20.04, glibc 2.31): devDeps
+  `camoufox` + `playwright-core@1.62`; binario del navegador en
+  `data/camoufox/` (gitignored, ~4 GB, descarga manual desde los releases
+  de daijro/camoufox); stub de `impit` (dependencia de camoufox que exige
+  glibc ≥ 2.33) persistido en `vendor/impit-stub/` vía `overrides` —
+  nunca se invoca sin proxy.
+- Vercel sigue intacta: imports lazy try/catch ya existentes; el refresco
+  solo corre en local.
+- `sofascoreHttp.js` NO cambia: su `cargarTokenPorDefecto` ya llama a
+  `getSofascoreToken`, que ahora se autorepara; y ante `403 challenge`
+  invalida y reintenta (el reintento ya recoge el token recién refrescado).
