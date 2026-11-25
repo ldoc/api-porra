@@ -532,6 +532,29 @@ const { stats, statusType, minute } = await scrapMatchFull(eventId);
 - **API base**: `https://www.sofascore.com/api/v1/`
 - **Imágenes base**: `https://img.sofascore.com/api/v1/`
 
+### Token anti-captcha (Turnstile)
+
+Sofascore exige resolver un captcha (Cloudflare Turnstile) que emite un JWT
+(`POST /api/v1/token/captcha`), ligado a la IP y válido hasta el `exp` del
+propio JWT (~12 h). Sin él, el edge responde `403 {"reason":"challenge"}` a
+los clientes que marca como bots.
+
+- `scripts/sofascoreToken.js` lo gestiona en modo manual: cache en
+  `data/.sofascore-token.json` (gitignored, releída en cada llamada) y
+  override vía `SOFASCORE_CAPTCHA_TOKEN` en `.env`.
+- Renovación (cuando caduca o salta `403 challenge`): abrir en el navegador
+  de confianza `https://www.sofascore.com/captcha.html?redirectUrl=<home
+  url-encoded>` (el widget resuelve solo tras el redirect), copiar
+  localStorage `sofa.captcha.token` y ejecutar
+  `node scripts/sofascoreToken.js --set <jwt>`. Sin reiniciar el scraper.
+- La automatización con Playwright NO es viable: Turnstile rechaza
+  navegadores automatizados (probado headless y headed con click válido). No
+  reintroducirla.
+- `scripts/sofascoreHttp.js` envía el JWT en `x-captcha` + cookie
+  `sofa_captcha` y ante `403 challenge` invalida la cache y reintenta una vez.
+- `server.js` en Vercel importa el módulo de token de forma lazy con
+  try/catch → allí se scrapea sin token.
+
 ## Reglas de la Porra - Fase de Liga
 
 ### Formato de la Fase de Liga
