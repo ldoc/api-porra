@@ -50,25 +50,38 @@ export function invalidarCache({ fsFn = fs, ruta = CACHE_PATH } = {}) {
 export const RENOVACION_URL = 'https://www.sofascore.com/captcha.html?redirectUrl=' +
   encodeURIComponent('https://www.sofascore.com/');
 
-// Env override > cache de fichero (se relee en cada llamada: renovar en caliente sin reiniciar).
-export function getSofascoreToken({
+// Stub: Task 2 lo sustituye por el refresco real con camoufox.
+export async function refrescarConCamoufox() {
+  throw new Error('CAPTCHA_NOT_IMPLEMENTED');
+}
+
+// Mutex: los refrescos concurrentes comparten una única promesa (un solo
+// navegador camoufox). env override > cache válida > refresco automático.
+let refrescoEnCurso = null;
+
+export async function getSofascoreToken({
   env = process.env,
   fsFn = fs,
   ruta = CACHE_PATH,
+  refrescar = refrescarConCamoufox,
   ahoraMs = Date.now()
 } = {}) {
   if (env.SOFASCORE_CAPTCHA_TOKEN) return env.SOFASCORE_CAPTCHA_TOKEN;
   const cache = leerCache(fsFn, ruta);
   if (!necesitaRefresco(cache, ahoraMs)) return cache.token;
-  throw new Error(
-    'CAPTCHA_FAILED: sin token de Sofascore válido. Renueva: 1) abre en tu navegador ' +
-    RENOVACION_URL + ' 2) tras el redirect copia localStorage "sofa.captcha.token" ' +
-    '3) ejecuta: node scripts/sofascoreToken.js --set <token> (o define ' +
-    'SOFASCORE_CAPTCHA_TOKEN en .env y reinicia).'
-  );
+  if (!refrescoEnCurso) {
+    refrescoEnCurso = Promise.resolve()
+      .then(refrescar)
+      .then(token => {
+        escribirCache(token, { fsFn, ruta });
+        return token;
+      })
+      .finally(() => { refrescoEnCurso = null; });
+  }
+  return refrescoEnCurso;
 }
 
-// CLI: renovación manual de la cache y verificación del token vigente.
+// CLI: renovación manual de la cache y verificación/auto-refresco del token.
 const esCli = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (esCli) {
   const args = process.argv.slice(2);
@@ -80,7 +93,7 @@ if (esCli) {
       }
       escribirCache(args[1]);
     }
-    const token = args[0] === '--set' ? args[1] : getSofascoreToken();
+    const token = args[0] === '--set' ? args[1] : await getSofascoreToken();
     const expMs = decodeJwtExpMs(token);
     console.log(JSON.stringify({
       ok: true,
