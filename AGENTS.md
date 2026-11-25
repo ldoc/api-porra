@@ -535,25 +535,39 @@ const { stats, statusType, minute } = await scrapMatchFull(eventId);
 ### Token anti-captcha (Turnstile)
 
 Sofascore exige resolver un captcha (Cloudflare Turnstile) que emite un JWT
-(`POST /api/v1/token/captcha`), ligado a la IP y válido hasta el `exp` del
-propio JWT (**~1 h** de TTL observado). Sin él, el edge responde
-`403 {"reason":"challenge"}` a los clientes que marca como bots. El flag es
-dinámico: con la IP "limpia" las peticiones sin token pueden pasar; bajo
+(`POST /api/v1/token/captcha`), ligado a la IP y con **TTL ~1 h**. Sin él,
+cuando el edge te marca como bot, responde `403 {"reason":"challenge"}`.
+El flag es dinámico: con la IP "limpia" las peticiones sin token pasan; bajo
 volumen de scraping se re-activa.
 
-- `scripts/sofascoreToken.js` lo gestiona en modo manual: cache en
-  `data/.sofascore-token.json` (gitignored, releída en cada llamada) y
-  override vía `SOFASCORE_CAPTCHA_TOKEN` en `.env`.
-- Renovación (cuando caduca o salta `403 challenge`): abrir en el navegador
-  de confianza `https://www.sofascore.com/captcha.html?redirectUrl=<home
-  url-encoded>` (el widget resuelve solo tras el redirect), copiar
-  localStorage `sofa.captcha.token` y ejecutar
-  `node scripts/sofascoreToken.js --set <jwt>`. Sin reiniciar el scraper.
-- La automatización con Playwright NO es viable: Turnstile rechaza
-  navegadores automatizados (probado headless y headed con click válido). No
-  reintroducirla.
+- `scripts/sofascoreToken.js` gestiona el token con **refresco automático
+  desatendido**: `getSofascoreToken` hace env `SOFASCORE_CAPTCHA_TOKEN` →
+  cache en `data/.sofascore-token.json` (gitignored, releída en cada
+  llamada) → si falta o caduca, lanza camoufox en display virtual
+  (`headless: 'virtual'` + `CAMOUFOX_VIRTUAL_DISPLAY_SIZE=1920x1080x24`)
+  que resuelve el Turnstile pasivamente y persiste el JWT (~60 min).
+  Mutex: un solo navegador por refresco aunque el scraper dispare en
+  paralelo.
+- **Fallback manual (por si Sofascore endurece contra camoufox)**: el error
+  `CAPTCHA_FAILED` en los logs trae las instrucciones — abrir en el
+  navegador de confianza la URL de renovación, copiar localStorage
+  `sofa.captcha.token` y ejecutar
+  `node scripts/sofascoreToken.js --set <jwt>`. O definir
+  `SOFASCORE_CAPTCHA_TOKEN` en `.env`.
+- Requisitos locales (Ubuntu 20.04/glibc 2.31): devDeps `camoufox` +
+  `playwright-core@1.62`; binario del navegador (~4 GB) en
+  `data/camoufox/<versión>/` (gitignored, descargar del zip linux de los
+  releases de daijro/camoufox y descomprimir con ejecutables); `impit`
+  (dep de camoufox) no carga con glibc < 2.33 → stub en
+  `vendor/impit-stub/` vía `overrides` (no se usa sin proxy).
+- La automatización con Playwright/patchright NO es viable: Turnstile
+  rechaza esos navegadores automatizados (incl. headed con click humano).
+  No reintroducirla. camoufox (Gecko + spoofing profundo) sí pasa, PERO solo
+  en modo virtual/headed con pantalla 1920x1080x24 (el headless normal y el
+  display virtual por defecto fallan).
 - `scripts/sofascoreHttp.js` envía el JWT en `x-captcha` + cookie
-  `sofa_captcha` y ante `403 challenge` invalida la cache y reintenta una vez.
+  `sofa_captcha`; ante `403 challenge` invalida la cache y reintenta una
+  vez (el reintento ya recoge el token recién refrescado).
 - `server.js` en Vercel importa el módulo de token de forma lazy con
   try/catch → allí se scrapea sin token.
 
