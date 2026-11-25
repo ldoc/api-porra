@@ -1,6 +1,7 @@
 import https from 'https';
 import fs from 'node:fs';
 import sharp from 'sharp';
+import { avisoCaptcha403 } from './avisoCaptcha.js';
 
 const url = 'https://www.sofascore.com/api/v1/unique-tournament/7/season/96518/standings/total';
 
@@ -46,6 +47,7 @@ function fetchSofascore(endpointUrl) {
       let data = '';
 
       if (res.statusCode !== 200) {
+        if (res.statusCode === 403) avisoCaptcha403();
         reject(new Error(`Petición fallida con código HTTP ${res.statusCode}`));
         return;
       }
@@ -72,7 +74,6 @@ function fetchSofascore(endpointUrl) {
   });
 }
 
-// creamos una función para obtener la imagen del escudo del equipo teniendo en cuenta la funcion anterior para evitar response 403
 function fetchSofascoreImage(urlImagen) {
   return new Promise((resolve, reject) => {
     const parsedUrl = new URL(urlImagen);

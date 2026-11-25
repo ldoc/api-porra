@@ -1,6 +1,7 @@
 import https from 'https';
 import fs from 'node:fs';
 import sharp from 'sharp';
+import { avisoCaptcha403 } from './avisoCaptcha.js';
 
 
 // Configurar ciphers específicos de Chrome para pasar el filtro de huella TLS
@@ -45,6 +46,7 @@ function fetchSofascore(endpointUrl) {
             let data = '';
 
             if (res.statusCode !== 200) {
+                if (res.statusCode === 403) avisoCaptcha403();
                 reject(new Error(`Petición fallida con código HTTP ${res.statusCode}`));
                 return;
             }

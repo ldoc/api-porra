@@ -2,6 +2,7 @@ import https from 'https';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { avisoCaptcha403 } from './avisoCaptcha.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -46,6 +47,7 @@ function _fetchRaw(endpointUrl) {
       let data = '';
 
       if (res.statusCode !== 200) {
+        if (res.statusCode === 403) avisoCaptcha403();
         reject(new Error(`Petición fallida con código HTTP ${res.statusCode}`));
         return;
       }
