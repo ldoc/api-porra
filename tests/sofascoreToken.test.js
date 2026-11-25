@@ -10,7 +10,8 @@ import {
   leerCache,
   escribirCache,
   invalidarCache,
-  getSofascoreToken
+  getSofascoreToken,
+  RENOVACION_URL
 } from '../scripts/sofascoreToken.js';
 
 const jwtConExp = (expSeg) => {
@@ -56,49 +57,27 @@ test('escribirCache/leerCache persisten y recuperan { token, exp }', () => {
   assert.equal(leerCache(fs, ruta), null);
 });
 
-test('getSofascoreToken: override por env gana y no refresca', async () => {
-  const refrescar = async () => { throw new Error('no debía refrescar'); };
-  const token = await getSofascoreToken({
-    force: true,
-    env: { SOFASCORE_CAPTCHA_TOKEN: 'manual-env' },
-    ruta: rutaTemp(),
-    refrescar
-  });
+test('getSofascoreToken: override por env gana incluso sin cache', () => {
+  const token = getSofascoreToken({ env: { SOFASCORE_CAPTCHA_TOKEN: 'manual-env' }, ruta: rutaTemp() });
   assert.equal(token, 'manual-env');
 });
 
-test('getSofascoreToken: cache válida → devuelve el token sin refrescar', async () => {
+test('getSofascoreToken: sin token → error CAPTCHA_FAILED con instrucciones de renovación', () => {
+  assert.throws(
+    () => getSofascoreToken({ env: {}, ruta: rutaTemp() }),
+    (e) => e.message.startsWith('CAPTCHA_FAILED') && e.message.includes(RENOVACION_URL)
+  );
+});
+
+test('getSofascoreToken: cache caducada → mismo error de renovación', () => {
+  const ruta = rutaTemp();
+  escribirCache(jwtConExp((Date.now() - 1000) / 1000), { ruta });
+  assert.throws(() => getSofascoreToken({ env: {}, ruta }), /CAPTCHA_FAILED/);
+});
+
+test('getSofascoreToken: cache válida → devuelve el token', () => {
   const ruta = rutaTemp();
   const token = jwtConExp((Date.now() + REFRESH_MARGIN_MS * 2) / 1000);
   escribirCache(token, { ruta });
-  const refrescar = async () => { throw new Error('no debía refrescar'); };
-  assert.equal(await getSofascoreToken({ ruta, refrescar }), token);
-});
-
-test('getSofascoreToken: force refresca y persiste la cache', async () => {
-  const ruta = rutaTemp();
-  const llamadas = [];
-  const refrescar = async () => { llamadas.push(1); return jwtConExp(1800000000); };
-  const token = await getSofascoreToken({ force: true, ruta, refrescar });
-  assert.equal(llamadas.length, 1);
-  assert.equal(token, jwtConExp(1800000000));
-  assert.deepEqual(leerCache(fs, ruta), { token: jwtConExp(1800000000), exp: 1800000000000 });
-});
-
-test('getSofascoreToken: mutex — refrescos concurrentes comparten una sola llamada', async () => {
-  const ruta = rutaTemp();
-  let llamadas = 0;
-  const refrescar = async () => {
-    llamadas++;
-    await new Promise(r => setTimeout(r, 20));
-    return jwtConExp(1800000000);
-  };
-  const [a, b, c] = await Promise.all([
-    getSofascoreToken({ force: true, ruta, refrescar }),
-    getSofascoreToken({ force: true, ruta, refrescar }),
-    getSofascoreToken({ force: true, ruta, refrescar })
-  ]);
-  assert.equal(llamadas, 1);
-  assert.equal(a, b);
-  assert.equal(b, c);
+  assert.equal(getSofascoreToken({ env: {}, ruta }), token);
 });

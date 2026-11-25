@@ -46,33 +46,50 @@ export function invalidarCache({ fsFn = fs, ruta = CACHE_PATH } = {}) {
   try { fsFn.unlinkSync(ruta); } catch {}
 }
 
-// Stub: Task 2 lo sustituye por el refresco real con Playwright.
-export async function refrescarConPlaywright() {
-  throw new Error('CAPTCHA_NOT_IMPLEMENTED');
-}
+// URL para renovar a mano en el navegador de confianza (Turnstile resuelve pasivo).
+export const RENOVACION_URL = 'https://www.sofascore.com/captcha.html?redirectUrl=' +
+  encodeURIComponent('https://www.sofascore.com/');
 
-// Mutex: los refrescos concurrentes comparten una única promesa (un solo navegador).
-let refrescoEnCurso = null;
-
-export async function getSofascoreToken({
-  force = false,
+// Env override > cache de fichero (se relee en cada llamada: renovar en caliente sin reiniciar).
+export function getSofascoreToken({
   env = process.env,
   fsFn = fs,
   ruta = CACHE_PATH,
-  refrescar = refrescarConPlaywright,
   ahoraMs = Date.now()
 } = {}) {
   if (env.SOFASCORE_CAPTCHA_TOKEN) return env.SOFASCORE_CAPTCHA_TOKEN;
   const cache = leerCache(fsFn, ruta);
-  if (!force && !necesitaRefresco(cache, ahoraMs)) return cache.token;
-  if (!refrescoEnCurso) {
-    refrescoEnCurso = Promise.resolve()
-      .then(refrescar)
-      .then(token => {
-        escribirCache(token, { fsFn, ruta });
-        return token;
-      })
-      .finally(() => { refrescoEnCurso = null; });
+  if (!necesitaRefresco(cache, ahoraMs)) return cache.token;
+  throw new Error(
+    'CAPTCHA_FAILED: sin token de Sofascore válido. Renueva: 1) abre en tu navegador ' +
+    RENOVACION_URL + ' 2) tras el redirect copia localStorage "sofa.captcha.token" ' +
+    '3) ejecuta: node scripts/sofascoreToken.js --set <token> (o define ' +
+    'SOFASCORE_CAPTCHA_TOKEN en .env y reinicia).'
+  );
+}
+
+// CLI: renovación manual de la cache y verificación del token vigente.
+const esCli = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (esCli) {
+  const args = process.argv.slice(2);
+  try {
+    if (args[0] === '--set') {
+      if (!args[1]) {
+        console.error('uso: node scripts/sofascoreToken.js --set <jwt>');
+        process.exit(1);
+      }
+      escribirCache(args[1]);
+    }
+    const token = args[0] === '--set' ? args[1] : getSofascoreToken();
+    const expMs = decodeJwtExpMs(token);
+    console.log(JSON.stringify({
+      ok: true,
+      expiracion: expMs ? new Date(expMs).toISOString() : null,
+      ttlMin: expMs ? Math.round((expMs - Date.now()) / 60000) : null
+    }, null, 2));
+    process.exit(0);
+  } catch (e) {
+    console.error(e.message);
+    process.exit(1);
   }
-  return refrescoEnCurso;
 }
